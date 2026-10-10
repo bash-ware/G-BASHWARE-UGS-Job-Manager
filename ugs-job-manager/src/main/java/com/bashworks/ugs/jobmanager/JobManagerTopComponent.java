@@ -46,6 +46,7 @@ public final class JobManagerTopComponent extends TopComponent {
 
         refreshTitle();
         setToolTipText("Load, catalog, and activate CNC G-code jobs from disk and web");
+        panel.getLanService().start();
     }
 
     @Override
@@ -58,6 +59,7 @@ public final class JobManagerTopComponent extends TopComponent {
     @Override
     protected void componentShowing() {
         refreshTitle();
+        panel.getLanService().start();
     }
 
     private void refreshTitle() {

@@ -165,6 +165,11 @@ public final class LanReceiverService {
                             byte[] respBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
                             DatagramPacket responsePacket = new DatagramPacket(respBytes, respBytes.length, packet.getAddress(), packet.getPort());
                             udpSocket.send(responsePacket);
+
+                            try {
+                                DatagramPacket bcast = new DatagramPacket(respBytes, respBytes.length, InetAddress.getByName("255.255.255.255"), DEFAULT_UDP_PORT);
+                                udpSocket.send(bcast);
+                            } catch (Exception ignored) {}
                         }
                     } catch (Exception ex) {
                         if (!running) break;
