@@ -52,6 +52,7 @@ public final class JobManagerTopComponent extends TopComponent {
     protected void componentOpened() {
         refreshTitle();
         backend.addUGSEventListener(gateway);
+        panel.getLanService().start();
     }
 
     @Override

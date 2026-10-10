@@ -6,10 +6,12 @@ import com.bashworks.ugs.jobmanager.machine.JobManagerListener;
 import com.bashworks.ugs.jobmanager.model.JobEntry;
 import com.bashworks.ugs.jobmanager.service.GcodeAnalyzer;
 import com.bashworks.ugs.jobmanager.service.JobLibraryService;
+import com.bashworks.ugs.jobmanager.service.LanReceiverService;
 import com.bashworks.ugs.jobmanager.service.WebJobService;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -17,23 +19,27 @@ import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.io.File;
 
 /**
  * Master UI panel for G-BASHWARE Job Manager. Contains navigation tabs for local
- * disk library and web downloads, a persistent machine status banner, and the job inspector.
+ * disk library, web downloads, zero-config LAN receiver, and persistent machine status.
  */
-public class JobManagerPanel extends JPanel implements JobManagerListener {
+public class JobManagerPanel extends JPanel implements JobManagerListener, LanReceiverService.LanListener {
 
     private final JobManagerGateway gateway;
     private final GcodeAnalyzer analyzer;
     private final JobLibraryService libraryService;
     private final WebJobService webService;
+    private final LanReceiverService lanService;
 
     // Header controls
     private final JLabel machineStatusBadge = UITheme.createBadge("DISCONNECTED", UITheme.BG_CARD_ALT, UITheme.TEXT_MUTED);
+    private final JLabel lanLedBadge = UITheme.createBadge("● GCODE MERGER SEARCHING...", new Color(0x35, 0x1E, 0x22), UITheme.ACCENT_RED);
+    private final JCheckBox chkAutoActivate = new JCheckBox("Auto-Load");
     private final JLabel activeJobLabel = new JLabel("No Job Loaded in UGS");
     private final DarkButton btnReloadActive = new DarkButton("🔄 Reload", DarkButton.ButtonStyle.SECONDARY);
     private final DarkButton btnUnloadActive = new DarkButton("✕ Unload", DarkButton.ButtonStyle.SECONDARY);
@@ -49,6 +55,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener {
         this.analyzer = new GcodeAnalyzer();
         this.libraryService = new JobLibraryService(null, analyzer);
         this.webService = new WebJobService(null, analyzer);
+        this.lanService = new LanReceiverService(gateway, analyzer, null);
 
         setLayout(new BorderLayout(0, 4));
         setBackground(UITheme.BG_DARK);
@@ -92,6 +99,8 @@ public class JobManagerPanel extends JPanel implements JobManagerListener {
 
         // Wire listener
         gateway.addListener(this);
+        lanService.addListener(this);
+        lanService.start();
 
         updateHeaderStatus();
         updateActiveJobDisplay(gateway.getActiveGcodeFile());
@@ -105,7 +114,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener {
                 BorderFactory.createEmptyBorder(6, 12, 6, 12)
         ));
 
-        // Left title & machine status
+        // Left title & machine status & LAN link LED
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         left.setOpaque(false);
 
@@ -114,6 +123,15 @@ public class JobManagerPanel extends JPanel implements JobManagerListener {
         title.setForeground(UITheme.TEXT_PRIMARY);
         left.add(title);
         left.add(machineStatusBadge);
+        left.add(lanLedBadge);
+
+        chkAutoActivate.setFont(UITheme.FONT_SMALL);
+        chkAutoActivate.setForeground(UITheme.TEXT_SECONDARY);
+        chkAutoActivate.setOpaque(false);
+        chkAutoActivate.setSelected(lanService.isAutoActivate());
+        chkAutoActivate.setToolTipText("Automatically load received G-code jobs directly into UGS");
+        chkAutoActivate.addActionListener(e -> lanService.setAutoActivate(chkAutoActivate.isSelected()));
+        left.add(chkAutoActivate);
 
         banner.add(left, BorderLayout.WEST);
 
@@ -227,7 +245,39 @@ public class JobManagerPanel extends JPanel implements JobManagerListener {
         SwingUtilities.invokeLater(this::updateHeaderStatus);
     }
 
+    @Override
+    public void onClientLinkChanged(boolean linked, String clientIp) {
+        SwingUtilities.invokeLater(() -> {
+            if (linked) {
+                lanLedBadge.setText("● GCODE MERGER: " + clientIp);
+                lanLedBadge.setForeground(UITheme.ACCENT_TEAL);
+                lanLedBadge.setToolTipText("Connected to GcodeMergerSplitter at " + clientIp);
+            } else {
+                lanLedBadge.setText("● GCODE MERGER SEARCHING...");
+                lanLedBadge.setForeground(UITheme.ACCENT_RED);
+                lanLedBadge.setToolTipText("Listening on UDP 9875 and HTTP 9876. Waiting for GcodeMergerSplitter...");
+            }
+        });
+    }
+
+    @Override
+    public void onJobReceived(JobEntry job, String clientIp, boolean activated) {
+        SwingUtilities.invokeLater(() -> {
+            localPanel.selectOrAddJob(job);
+            detailsPanel.setJob(job);
+            if (activated) {
+                updateActiveJobDisplay(job.getFile());
+            }
+        });
+    }
+
+    public LanReceiverService getLanService() {
+        return lanService;
+    }
+
     public void close() {
         gateway.removeListener(this);
+        lanService.removeListener(this);
+        lanService.stop();
     }
 }
