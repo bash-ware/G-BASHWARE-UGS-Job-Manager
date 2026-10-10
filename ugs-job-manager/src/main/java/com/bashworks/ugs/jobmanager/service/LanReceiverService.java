@@ -235,28 +235,49 @@ public final class LanReceiverService {
     private class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            recordClientPing(exchange.getRemoteAddress().getAddress().getHostAddress());
+            try {
+                if (exchange.getRemoteAddress() != null && exchange.getRemoteAddress().getAddress() != null) {
+                    recordClientPing(exchange.getRemoteAddress().getAddress().getHostAddress());
+                }
 
-            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
 
-            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
-                exchange.sendResponseHeaders(204, -1);
-                return;
-            }
+                if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                    exchange.sendResponseHeaders(204, -1);
+                    return;
+                }
 
-            File active = gateway.getActiveGcodeFile();
-            String json = String.format(Locale.US,
-                    "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.1.0\",\"connected\":true," +
-                    "\"machineConnected\":%b,\"machineState\":\"%s\",\"isIdle\":%b,\"isSending\":%b," +
-                    "\"activeJob\":\"%s\"}",
-                    gateway.isConnected(), gateway.getControllerStateName(), gateway.isIdle(), gateway.isSendingFile(),
-                    active != null ? escapeJson(active.getName()) : "");
+                boolean isConn = false;
+                String state = "IDLE";
+                boolean isIdle = true;
+                boolean isSending = false;
+                String activeJob = "";
+                try {
+                    isConn = gateway.isConnected();
+                    state = gateway.getControllerStateName();
+                    isIdle = gateway.isIdle();
+                    isSending = gateway.isSendingFile();
+                    File active = gateway.getActiveGcodeFile();
+                    if (active != null) activeJob = active.getName();
+                } catch (Exception ignored) {}
 
-            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(200, bytes.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(bytes);
+                String json = String.format(Locale.US,
+                        "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.1.0\",\"connected\":true," +
+                        "\"machineConnected\":%b,\"machineState\":\"%s\",\"isIdle\":%b,\"isSending\":%b," +
+                        "\"activeJob\":\"%s\"}",
+                        isConn, state != null ? state : "UNKNOWN", isIdle, isSending,
+                        escapeJson(activeJob));
+
+                byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            } catch (Exception ex) {
+                try { exchange.sendResponseHeaders(500, -1); } catch (Exception ignored) {}
+            } finally {
+                try { exchange.close(); } catch (Exception ignored) {}
             }
         }
     }
@@ -264,100 +285,104 @@ public final class LanReceiverService {
     private class UploadHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String clientIp = exchange.getRemoteAddress().getAddress().getHostAddress();
-            recordClientPing(clientIp);
+            try {
+                String clientIp = exchange.getRemoteAddress().getAddress().getHostAddress();
+                recordClientPing(clientIp);
 
-            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
 
-            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
-                exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
-                exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Activate");
-                exchange.sendResponseHeaders(204, -1);
-                return;
-            }
-
-            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-                sendError(exchange, 405, "Method Not Allowed");
-                return;
-            }
-
-            Map<String, String> queryParams = parseQueryParams(exchange.getRequestURI().getRawQuery());
-            String filename = exchange.getRequestHeaders().getFirst("X-Filename");
-            if (filename == null || filename.trim().isEmpty()) {
-                filename = queryParams.get("filename");
-            }
-            if (filename == null || filename.trim().isEmpty()) {
-                filename = "job_" + System.currentTimeMillis() + ".nc";
-            }
-            filename = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
-            if (!filename.toLowerCase().endsWith(".nc") && !filename.toLowerCase().endsWith(".gcode")
-                    && !filename.toLowerCase().endsWith(".tap") && !filename.toLowerCase().endsWith(".ngc")) {
-                filename += ".nc";
-            }
-
-            boolean shouldActivate = autoActivate;
-            String activateHeader = exchange.getRequestHeaders().getFirst("X-Activate");
-            if (activateHeader != null) {
-                shouldActivate = "true".equalsIgnoreCase(activateHeader.trim()) || "1".equals(activateHeader.trim());
-            } else if (queryParams.containsKey("activate")) {
-                shouldActivate = "true".equalsIgnoreCase(queryParams.get("activate")) || "1".equals(queryParams.get("activate"));
-            }
-
-            File targetFile = new File(incomingDirectory, filename);
-            try (InputStream in = exchange.getRequestBody();
-                 FileOutputStream out = new FileOutputStream(targetFile)) {
-                byte[] buf = new byte[8192];
-                int read;
-                while ((read = in.read(buf)) != -1) {
-                    out.write(buf, 0, read);
+                if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Activate");
+                    exchange.sendResponseHeaders(204, -1);
+                    return;
                 }
-            }
 
-            if (!targetFile.exists() || targetFile.length() == 0) {
-                sendError(exchange, 400, "Received empty file");
-                return;
-            }
-
-            JobAnalysis analysis = analyzer.analyze(targetFile);
-            JobEntry entry = new JobEntry(
-                    targetFile.getAbsolutePath(),
-                    targetFile.getName(),
-                    targetFile,
-                    "LAN (" + clientIp + ")",
-                    JobOrigin.LOCAL_DISK,
-                    targetFile.length(),
-                    targetFile.lastModified()
-            );
-            entry.setAnalysis(analysis);
-
-            boolean activated = false;
-            if (shouldActivate) {
-                try {
-                    gateway.loadJobIntoUgs(targetFile);
-                    entry.setActiveInUgs(true);
-                    activated = true;
-                } catch (Exception ex) {
-                    System.err.println("Could not auto-activate job in UGS: " + ex.getMessage());
+                if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                    sendError(exchange, 405, "Method Not Allowed");
+                    return;
                 }
-            }
 
-            final boolean isActivated = activated;
-            SwingUtilities.invokeLater(() -> {
-                for (LanListener l : listeners) {
-                    l.onJobReceived(entry, clientIp, isActivated);
+                Map<String, String> queryParams = parseQueryParams(exchange.getRequestURI().getRawQuery());
+                String filename = exchange.getRequestHeaders().getFirst("X-Filename");
+                if (filename == null || filename.trim().isEmpty()) {
+                    filename = queryParams.get("filename");
                 }
-            });
+                if (filename == null || filename.trim().isEmpty()) {
+                    filename = "job_" + System.currentTimeMillis() + ".nc";
+                }
+                filename = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
+                if (!filename.toLowerCase().endsWith(".nc") && !filename.toLowerCase().endsWith(".gcode")
+                        && !filename.toLowerCase().endsWith(".tap") && !filename.toLowerCase().endsWith(".ngc")) {
+                    filename += ".nc";
+                }
 
-            String json = String.format(Locale.US,
-                    "{\"success\":true,\"filename\":\"%s\",\"size\":%d,\"lines\":%d,\"dimensions\":\"%s\",\"activated\":%b}",
-                    escapeJson(filename), targetFile.length(), analysis.getTotalLines(),
-                    escapeJson(analysis.getBounds().toDimensionsString(analysis.getUnits())), activated);
+                boolean shouldActivate = autoActivate;
+                String activateHeader = exchange.getRequestHeaders().getFirst("X-Activate");
+                if (activateHeader != null) {
+                    shouldActivate = "true".equalsIgnoreCase(activateHeader.trim()) || "1".equals(activateHeader.trim());
+                } else if (queryParams.containsKey("activate")) {
+                    shouldActivate = "true".equalsIgnoreCase(queryParams.get("activate")) || "1".equals(queryParams.get("activate"));
+                }
 
-            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(200, bytes.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(bytes);
+                File targetFile = new File(incomingDirectory, filename);
+                try (InputStream in = exchange.getRequestBody();
+                     FileOutputStream out = new FileOutputStream(targetFile)) {
+                    byte[] buf = new byte[8192];
+                    int read;
+                    while ((read = in.read(buf)) != -1) {
+                        out.write(buf, 0, read);
+                    }
+                }
+
+                if (!targetFile.exists() || targetFile.length() == 0) {
+                    sendError(exchange, 400, "Received empty file");
+                    return;
+                }
+
+                JobAnalysis analysis = analyzer.analyze(targetFile);
+                JobEntry entry = new JobEntry(
+                        targetFile.getAbsolutePath(),
+                        targetFile.getName(),
+                        targetFile,
+                        "LAN (" + clientIp + ")",
+                        JobOrigin.LOCAL_DISK,
+                        targetFile.length(),
+                        targetFile.lastModified()
+                );
+                entry.setAnalysis(analysis);
+
+                boolean activated = false;
+                if (shouldActivate) {
+                    try {
+                        gateway.loadJobIntoUgs(targetFile);
+                        entry.setActiveInUgs(true);
+                        activated = true;
+                    } catch (Exception ex) {
+                        System.err.println("Could not auto-activate job in UGS: " + ex.getMessage());
+                    }
+                }
+
+                final boolean isActivated = activated;
+                SwingUtilities.invokeLater(() -> {
+                    for (LanListener l : listeners) {
+                        l.onJobReceived(entry, clientIp, isActivated);
+                    }
+                });
+
+                String json = String.format(Locale.US,
+                        "{\"success\":true,\"filename\":\"%s\",\"size\":%d,\"lines\":%d,\"dimensions\":\"%s\",\"activated\":%b}",
+                        escapeJson(filename), targetFile.length(), analysis.getTotalLines(),
+                        escapeJson(analysis.getBounds().toDimensionsString(analysis.getUnits())), activated);
+
+                byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            } finally {
+                try { exchange.close(); } catch (Exception ignored) {}
             }
         }
 
