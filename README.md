@@ -1,4 +1,4 @@
-# G-BASHWARE Job Manager 1.3.0 for UGS
+# G-BASHWARE Job Manager 1.3.1 for UGS
 
 [Download the latest release](https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager/releases/latest).
 

@@ -1,4 +1,4 @@
-# G-BASHWARE Job Manager 1.3.0 — Installation
+# G-BASHWARE Job Manager 1.3.1 — Installation
 
 ## Requirements
 
@@ -27,4 +27,4 @@ If you already use the project's NetBeans update center, check for updates in **
 - Queue removals persist across refresh and restart. They preserve files on disk and do not stop or unload an active UGS job. Sending a job again queues it again.
 - Select a job to inspect dimensions, tools, feed, spindle and G-code. **Start job** asks for confirmation before streaming.
 
-Version 1.3.0 adds persistent run order, drag/arrow reordering and explicit run/completion states. The heading/search/refresh block and preview simulator bar have been removed.
+Version 1.3.1 adds persistent run order, drag/arrow reordering and explicit run/completion states. The heading/search/refresh block and preview simulator bar have been removed.
