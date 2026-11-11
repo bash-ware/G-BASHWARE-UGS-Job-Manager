@@ -69,7 +69,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         this.localPanel = new LocalJobsPanel(
                 lanService.getIncomingDirectory(),
                 gateway,
-                job -> detailsPanel.setJob(job),
+                this::inspectJob,
                 this::activateJobDirectly
         );
 
@@ -87,6 +87,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         lanService.addListener(this);
         lanService.start();
 
+        if (gateway.isSendingFile()) localPanel.jobStarted(gateway.getActiveGcodeFile());
         updateHeaderStatus();
         updateActiveJobDisplay(gateway.getActiveGcodeFile());
     }
@@ -154,12 +155,27 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         return banner;
     }
 
+    private void inspectJob(JobEntry job) {
+        detailsPanel.setJob(job);
+        if (job != null && localPanel != null) detailsPanel.setQueueStatus(localPanel.statusFor(job));
+    }
+
+    @Override public void onJobStarted(File file) {
+        SwingUtilities.invokeLater(() -> { localPanel.jobStarted(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
+    }
+    @Override public void onJobFinished(File file) {
+        SwingUtilities.invokeLater(() -> { localPanel.jobFinished(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
+    }
+    @Override public void onJobInterrupted(File file) {
+        SwingUtilities.invokeLater(() -> { localPanel.jobInterrupted(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
+    }
+
     private void activateJobDirectly(JobEntry job) {
         if (job == null || !job.getFile().exists()) return;
         try {
             gateway.loadJobIntoUgs(job.getFile());
             job.setActiveInUgs(true);
-            detailsPanel.setJob(job);
+            inspectJob(job);
             updateActiveJobDisplay(job.getFile());
         } catch (Exception ex) {
             showError("Job Activation Error", "Failed to activate '" + job.getName() + "':\n" + ex.getMessage());
@@ -249,7 +265,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
     public void onJobReceived(JobEntry job, String clientIp, boolean activated) {
         SwingUtilities.invokeLater(() -> {
             localPanel.selectOrAddJob(job);
-            detailsPanel.setJob(job);
+            inspectJob(job);
             if (activated) {
                 updateActiveJobDisplay(job.getFile());
             }

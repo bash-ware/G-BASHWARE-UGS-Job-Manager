@@ -33,5 +33,5 @@ try {
     Pop-Location
 }
 
-$nbm = Join-Path $moduleRoot 'target\nbm\ugs-platform-plugin-job-manager-1.2.0.nbm'
+$nbm = Join-Path $moduleRoot 'target\nbm\ugs-platform-plugin-job-manager-1.3.0.nbm'
 Write-Host "NBM created: $nbm"

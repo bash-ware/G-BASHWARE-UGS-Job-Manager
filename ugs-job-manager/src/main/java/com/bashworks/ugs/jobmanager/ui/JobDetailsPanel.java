@@ -36,6 +36,7 @@ public class JobDetailsPanel extends JPanel {
     private final JobManagerGateway gateway;
     private final GcodeAnalyzer analyzer;
     private JobEntry currentJob;
+    private String queueStatus;
 
     private final JLabel titleLabel = new JLabel("Select a job");
     private final JLabel sourceBadge = UITheme.createBadge("NONE", UITheme.BG_CARD_ALT, UITheme.TEXT_MUTED);
@@ -192,10 +193,16 @@ public class JobDetailsPanel extends JPanel {
     }
 
     public void setJob(JobEntry job) {
+        queueStatus = null;
         this.currentJob = job;
         if (job != null && job.getAnalysis() == null && job.getFile().exists()) {
             job.setAnalysis(analyzer.analyze(job.getFile()));
         }
+        updateUIState();
+    }
+
+    public void setQueueStatus(String status) {
+        queueStatus = status;
         updateUIState();
     }
 
@@ -253,6 +260,10 @@ public class JobDetailsPanel extends JPanel {
             activeBadge.setForeground(UITheme.TEXT_MUTED);
         }
 
+        if (queueStatus != null) {
+            activeBadge.setText(queueStatus);
+            activeBadge.setForeground(UITheme.statusColor(queueStatus));
+        }
         JobAnalysis a = currentJob.getAnalysis();
         if (a != null) {
             valDimensions.setText(a.getBounds().toDimensionsString(a.getUnits()));

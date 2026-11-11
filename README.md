@@ -1,13 +1,18 @@
-# G-BASHWARE Job Manager 1.2.0 for UGS
+# G-BASHWARE Job Manager 1.3.0 for UGS
 
 [Download the latest release](https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager/releases/latest).
 
 Local incoming-job queue for G-code sent from GcodeMergerSplitter on another computer.
 
-- Single queue with search, job details and G-code preview.
-- Ctrl/Shift selection and **Remove selected**; **Clear queue** includes hidden search results.
+- Numbered manual run order with Up/Down arrows, Alt+Up/Down shortcuts and drag reordering.
+- Clear Next, Running, Paused, Stopped and Finished states; completed history stays below pending work.
+- Order and finished states persist. New jobs append; the running job is locked against reordering.
+- Load next prepares the next pending job. Starting remains manual; nothing auto-starts after completion.
+- Job details and G-code preview.
+- Ctrl/Shift selection and **Remove selected**; **Clear queue** removes every entry.
+- Compact interface without the heading/search/refresh block or simulator toolbar.
 - Removals persist across refresh and restart. G-code files remain on disk and the active UGS job is unaffected.
-- Incoming jobs are stored in `~/.ugs-job-manager/incoming/`; resending a job adds it to the queue again.
+- Incoming jobs are stored in `~/.ugs-job-manager/incoming/`; resending a job adds a new uniquely named queue file, preserving earlier jobs.
 - LAN discovery on UDP 9875 and receiving on HTTP 9876. The LAN upload endpoint remains; URL downloads have been removed.
 - Load into UGS, start, reload and unload actions retain the UGS gateway controls.
 

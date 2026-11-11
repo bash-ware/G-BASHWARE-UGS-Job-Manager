@@ -7,6 +7,12 @@ import java.io.File;
  */
 public interface JobManagerListener {
 
+    default void onJobStarted(File file) {}
+
+    default void onJobFinished(File file) {}
+
+    default void onJobInterrupted(File file) {}
+
     void onActiveJobChanged(File activeFile);
 
     void onMachineConnectionChanged(boolean connected);

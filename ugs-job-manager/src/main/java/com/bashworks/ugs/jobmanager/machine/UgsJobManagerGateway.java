@@ -23,10 +23,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventListener {
 
     private final BackendAPI backend;
+    private File streamingFile;
     private final List<JobManagerListener> listeners = new CopyOnWriteArrayList<>();
 
     public UgsJobManagerGateway(BackendAPI backend) {
         this.backend = Objects.requireNonNull(backend, "backend");
+        if (backend.isSendingFile()) streamingFile = getActiveGcodeFile();
     }
 
     @Override
@@ -57,8 +59,8 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
 
     @Override
     public File getActiveGcodeFile() {
-        File proc = backend.getProcessedGcodeFile();
-        return (proc != null && proc.exists()) ? proc : backend.getGcodeFile();
+        File source = backend.getGcodeFile();
+        return source != null ? source : backend.getProcessedGcodeFile();
     }
 
     @Override
@@ -145,6 +147,7 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
             boolean idle = isIdle();
             boolean sending = isSendingFile();
 
+            if (!connected || (state != null && "ALARM".equals(state.name()))) interruptStream();
             SwingUtilities.invokeLater(() -> {
                 for (JobManagerListener l : listeners) {
                     l.onMachineConnectionChanged(connected);
@@ -153,6 +156,22 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
             });
         } else if (event instanceof StreamEvent) {
             StreamEvent se = (StreamEvent) event;
+            switch (se.getType()) {
+                case STREAM_STARTED:
+                    streamingFile = getActiveGcodeFile();
+                    File started = streamingFile;
+                    SwingUtilities.invokeLater(() -> listeners.forEach(l -> l.onJobStarted(started)));
+                    break;
+                case STREAM_COMPLETE:
+                    File finished = streamingFile;
+                    streamingFile = null;
+                    if (finished != null) SwingUtilities.invokeLater(() -> listeners.forEach(l -> l.onJobFinished(finished)));
+                    break;
+                case STREAM_CANCELED:
+                    interruptStream();
+                    break;
+                default: break;
+            }
             boolean streaming = isSendingFile();
             boolean paused = isPaused();
 
@@ -162,6 +181,12 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
                 }
             });
         }
+    }
+
+    private void interruptStream() {
+        File interrupted = streamingFile;
+        streamingFile = null;
+        if (interrupted != null) SwingUtilities.invokeLater(() -> listeners.forEach(l -> l.onJobInterrupted(interrupted)));
     }
 
     private void dispatchActiveJobChanged(File file) {

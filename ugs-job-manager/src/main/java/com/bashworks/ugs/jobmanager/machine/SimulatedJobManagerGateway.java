@@ -87,15 +87,36 @@ public final class SimulatedJobManagerGateway implements JobManagerGateway {
         this.idle = false;
         this.stateName = "RUN";
 
+        File startedFile = activeGcodeFile;
         SwingUtilities.invokeLater(() -> {
             for (JobManagerListener l : listeners) {
+                l.onJobStarted(startedFile);
                 l.onMachineStateChanged("RUN", false, true);
                 l.onStreamStateChanged(true, false);
             }
         });
     }
 
+    public void finishSimulatedJob() { endSimulatedJob(true); }
+    public void cancelSimulatedJob() { endSimulatedJob(false); }
+    private void endSimulatedJob(boolean completed) {
+        if (!sending) return;
+        File ended = activeGcodeFile;
+        sending = false;
+        paused = false;
+        idle = connected;
+        stateName = connected ? "IDLE" : "DISCONNECTED";
+        SwingUtilities.invokeLater(() -> {
+            for (JobManagerListener l : listeners) {
+                if (completed) l.onJobFinished(ended); else l.onJobInterrupted(ended);
+                l.onStreamStateChanged(false, false);
+                l.onMachineStateChanged(stateName, idle, false);
+            }
+        });
+    }
+
     public void setSimulatedConnected(boolean connected) {
+        if (!connected && sending) endSimulatedJob(false);
         this.connected = connected;
         this.stateName = connected ? "IDLE" : "DISCONNECTED";
         this.idle = connected;

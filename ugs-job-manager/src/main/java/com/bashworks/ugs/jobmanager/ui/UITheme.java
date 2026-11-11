@@ -44,6 +44,14 @@ public final class UITheme {
     public static final Font FONT_SMALL_BOLD = new Font("Segoe UI", Font.BOLD, 12);
     public static final Font FONT_CODE = new Font("Consolas", Font.PLAIN, 13);
 
+    public static Color statusColor(String status) {
+        if (status.startsWith("NEXT")) return ACCENT_CYAN;
+        if ("RUNNING".equals(status)) return ACCENT_TEAL;
+        if ("PAUSED".equals(status) || "STOPPED".equals(status)) return ACCENT_AMBER;
+        if ("FINISHED".equals(status)) return new Color(0x9B, 0xB1, 0xC7);
+        return TEXT_MUTED;
+    }
+
     private UITheme() {
     }
 

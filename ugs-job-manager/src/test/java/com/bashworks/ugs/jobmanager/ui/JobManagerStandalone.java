@@ -50,23 +50,6 @@ public class JobManagerStandalone {
 
             frame.add(panel, BorderLayout.CENTER);
 
-            // Simulation Toolbar at Bottom
-            JPanel simToolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-            simToolbar.setBackground(UITheme.BG_CARD);
-            simToolbar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UITheme.BORDER_COLOR));
-
-            JLabel simLabel = new JLabel("PREVIEW / SIMULATED MACHINE");
-            simLabel.setFont(UITheme.FONT_SMALL_BOLD);
-            simLabel.setForeground(UITheme.ACCENT_CYAN);
-            simToolbar.add(simLabel);
-
-            DarkButton btnConn = new DarkButton("Toggle Machine Connect", DarkButton.ButtonStyle.SECONDARY);
-            btnConn.setFont(UITheme.FONT_SMALL);
-            btnConn.addActionListener(e -> gateway.setSimulatedConnected(!gateway.isConnected()));
-            simToolbar.add(btnConn);
-
-            frame.add(simToolbar, BorderLayout.SOUTH);
-
             frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);

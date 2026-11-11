@@ -270,7 +270,7 @@ public final class LanReceiverService {
                 } catch (Exception ignored) {}
 
                 String json = String.format(Locale.US,
-                        "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.2.0\",\"connected\":true," +
+                        "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.3.0\",\"connected\":true," +
                         "\"machineConnected\":%b,\"machineState\":\"%s\",\"isIdle\":%b,\"isSending\":%b," +
                         "\"activeJob\":\"%s\"}",
                         isConn, state != null ? state : "UNKNOWN", isIdle, isSending,
@@ -333,20 +333,28 @@ public final class LanReceiverService {
                     shouldActivate = "true".equalsIgnoreCase(queryParams.get("activate")) || "1".equals(queryParams.get("activate"));
                 }
 
-                File targetFile = new File(incomingDirectory, filename);
-                try (InputStream in = exchange.getRequestBody();
-                     FileOutputStream out = new FileOutputStream(targetFile)) {
-                    byte[] buf = new byte[8192];
-                    int read;
-                    while ((read = in.read(buf)) != -1) {
-                        out.write(buf, 0, read);
+                // Stage incomplete uploads outside the queue and never overwrite a queued/running file.
+                java.nio.file.Path staging = java.nio.file.Files.createTempFile(incomingDirectory.toPath(), ".upload-", ".part");
+                File targetFile;
+                try {
+                    try (InputStream in = exchange.getRequestBody(); OutputStream out = java.nio.file.Files.newOutputStream(staging)) {
+                        in.transferTo(out);
                     }
-                }
-
-                if (!targetFile.exists() || targetFile.length() == 0) {
-                    sendError(exchange, 400, "Received empty file");
-                    return;
-                }
+                    if (java.nio.file.Files.size(staging) == 0) {
+                        sendError(exchange, 400, "Received empty file");
+                        return;
+                    }
+                    int suffix = 1;
+                    int dot = filename.lastIndexOf('.');
+                    while (true) {
+                        String uniqueName = suffix == 1 ? filename : filename.substring(0, dot) + "_" + suffix + filename.substring(dot);
+                        targetFile = new File(incomingDirectory, uniqueName);
+                        try {
+                            java.nio.file.Files.move(staging, targetFile.toPath());
+                            break;
+                        } catch (java.nio.file.FileAlreadyExistsException collision) { suffix++; }
+                    }
+                } finally { java.nio.file.Files.deleteIfExists(staging); }
 
                 JobAnalysis analysis = analyzer.analyze(targetFile);
                 JobEntry entry = new JobEntry(
@@ -361,7 +369,7 @@ public final class LanReceiverService {
                 entry.setAnalysis(analysis);
 
                 boolean activated = false;
-                if (shouldActivate) {
+                if (shouldActivate && gateway.getActiveGcodeFile() == null && !gateway.isSendingFile()) {
                     try {
                         gateway.loadJobIntoUgs(targetFile);
                         entry.setActiveInUgs(true);
@@ -380,7 +388,7 @@ public final class LanReceiverService {
 
                 String json = String.format(Locale.US,
                         "{\"success\":true,\"filename\":\"%s\",\"size\":%d,\"lines\":%d,\"dimensions\":\"%s\",\"activated\":%b}",
-                        escapeJson(filename), targetFile.length(), analysis.getTotalLines(),
+                        escapeJson(targetFile.getName()), targetFile.length(), analysis.getTotalLines(),
                         escapeJson(analysis.getBounds().toDimensionsString(analysis.getUnits())), activated);
 
                 byte[] bytes = json.getBytes(StandardCharsets.UTF_8);

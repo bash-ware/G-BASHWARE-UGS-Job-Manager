@@ -38,16 +38,11 @@ public class JobTableRenderer extends DefaultTableCellRenderer {
                 label.setForeground(UITheme.TEXT_PRIMARY);
             }
 
-            if (column == 0 && value instanceof String) {
-                // Status column
-                String status = (String) value;
-                if ("ACTIVE".equalsIgnoreCase(status)) {
-                    label.setForeground(UITheme.ACCENT_TEAL);
-                    label.setFont(UITheme.FONT_BODY_BOLD);
-                } else {
-                    label.setForeground(UITheme.TEXT_MUTED);
-                }
-            } else if (column == 3 || column == 4) {
+            if (column == 1 && value instanceof String) {
+                String status = (String)value;
+                label.setForeground(UITheme.statusColor(status));
+                label.setFont(UITheme.FONT_BODY_BOLD);
+            } else if (column == 0 || column == 3 || column == 4) {
                 // Size or Date
                 label.setHorizontalAlignment(RIGHT);
                 if (!isSelected) {
@@ -56,6 +51,7 @@ public class JobTableRenderer extends DefaultTableCellRenderer {
             } else {
                 label.setHorizontalAlignment(LEFT);
             }
+            label.setToolTipText(value == null ? null : value.toString());
         }
 
         return c;
