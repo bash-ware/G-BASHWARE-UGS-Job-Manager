@@ -7,26 +7,18 @@ import com.bashworks.ugs.jobmanager.model.JobEntry;
 import com.bashworks.ugs.jobmanager.service.GcodeAnalyzer;
 
 import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.io.File;
-import java.util.List;
 
 /**
  * Inspector and Activation control panel for the currently selected CNC job.
@@ -54,8 +46,7 @@ public class JobDetailsPanel extends JPanel {
     private final JLabel valDate = new JLabel("—");
 
     // Preview
-    private final JTextArea previewTextArea = new JTextArea();
-    private final JScrollPane previewScrollPane;
+    private final ToolpathPreviewPanel toolpathPreview = new ToolpathPreviewPanel();
 
     // Action buttons
     private final DarkButton btnActivate = new DarkButton("Load into UGS", DarkButton.ButtonStyle.PRIMARY);
@@ -99,31 +90,7 @@ public class JobDetailsPanel extends JPanel {
         statsCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 280));
         centerPanel.add(statsCard, BorderLayout.NORTH);
 
-        // Preview Card
-        JPanel previewCard = new JPanel(new BorderLayout(4, 4));
-        previewCard.setBackground(UITheme.BG_CARD);
-        previewCard.setBorder(BorderFactory.createCompoundBorder(
-                new UITheme.RoundedBorder(UITheme.BORDER_COLOR, 8),
-                BorderFactory.createEmptyBorder(6, 8, 6, 8)
-        ));
-
-        JLabel previewHeader = new JLabel("G-CODE PREVIEW  /  FIRST 50 LINES");
-        previewHeader.setFont(UITheme.FONT_SMALL_BOLD);
-        previewHeader.setForeground(UITheme.TEXT_SECONDARY);
-        previewCard.add(previewHeader, BorderLayout.NORTH);
-
-        previewTextArea.setFont(UITheme.FONT_CODE);
-        previewTextArea.setBackground(UITheme.BG_INPUT);
-        previewTextArea.setForeground(new Color(0xD0, 0xD4, 0xE0));
-        previewTextArea.setCaretColor(UITheme.ACCENT_CYAN);
-        previewTextArea.setEditable(false);
-        previewTextArea.setRows(8);
-
-        previewScrollPane = new JScrollPane(previewTextArea);
-        previewScrollPane.setBorder(BorderFactory.createLineBorder(UITheme.BORDER_COLOR, 1));
-        previewCard.add(previewScrollPane, BorderLayout.CENTER);
-
-        centerPanel.add(previewCard, BorderLayout.CENTER);
+        centerPanel.add(toolpathPreview, BorderLayout.CENTER);
 
         // Buttons Panel
         JPanel actionsPanel = new JPanel(new java.awt.GridLayout(0, 1, 0, 8));
@@ -195,6 +162,7 @@ public class JobDetailsPanel extends JPanel {
     public void setJob(JobEntry job) {
         queueStatus = null;
         this.currentJob = job;
+        toolpathPreview.setJob(job == null ? null : job.getFile());
         if (job != null && job.getAnalysis() == null && job.getFile().exists()) {
             job.setAnalysis(analyzer.analyze(job.getFile()));
         }
@@ -218,7 +186,7 @@ public class JobDetailsPanel extends JPanel {
 
     private void updateUIState() {
         if (currentJob == null) {
-            feedbackLabel.setText("Choose a queued job to inspect its G-code.");
+            feedbackLabel.setText("Choose a queued job to inspect its toolpath.");
             titleLabel.setText("Select a job");
             sourceBadge.setText("NONE");
             activeBadge.setText("INACTIVE");
@@ -229,7 +197,6 @@ public class JobDetailsPanel extends JPanel {
             valSpindle.setText("—");
             valFeed.setText("—");
             valSize.setText("—");
-            previewTextArea.setText("");
 
             btnActivate.setEnabled(false);
             btnRun.setEnabled(false);
@@ -276,14 +243,6 @@ public class JobDetailsPanel extends JPanel {
             valSpindle.setText(a.getSpindleSummary());
             valFeed.setText(a.getFeedRateSummary());
 
-            // Build preview
-            StringBuilder sb = new StringBuilder();
-            List<String> lines = a.getPreviewLines();
-            for (int i = 0; i < lines.size(); i++) {
-                sb.append(String.format("%3d | %s\n", i + 1, lines.get(i)));
-            }
-            previewTextArea.setText(sb.toString());
-            previewTextArea.setCaretPosition(0);
         } else {
             valDimensions.setText("—");
             valRange.setText("—");
@@ -291,7 +250,6 @@ public class JobDetailsPanel extends JPanel {
             valTools.setText("—");
             valSpindle.setText("—");
             valFeed.setText("—");
-            previewTextArea.setText("");
         }
 
         valSize.setText(currentJob.getFormattedSize());
@@ -304,6 +262,8 @@ public class JobDetailsPanel extends JPanel {
         boolean canRun = isActive && gateway.isConnected() && gateway.isIdle() && !gateway.isSendingFile();
         btnRun.setEnabled(canRun);
     }
+
+    public void close() { toolpathPreview.close(); }
 
     private void activateCurrentJob() {
         if (currentJob == null || !currentJob.getFile().exists()) {

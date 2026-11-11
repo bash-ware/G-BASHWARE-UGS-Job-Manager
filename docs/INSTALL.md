@@ -1,4 +1,4 @@
-# G-BASHWARE Job Manager 1.3.1 — Installation
+# G-BASHWARE Job Manager 1.4.0 — Installation
 
 ## Requirements
 
@@ -25,6 +25,8 @@ If you already use the project's NetBeans update center, check for updates in **
 - **Load next** prepares the next pending job; starting each run remains manual.
 - **Clear queue** removes every queue entry.
 - Queue removals persist across refresh and restart. They preserve files on disk and do not stop or unload an active UGS job. Sending a job again queues it again.
-- Select a job to inspect dimensions, tools, feed, spindle and G-code. **Start job** asks for confirmation before streaming.
+- Select a job to inspect dimensions, tools, feed, spindle and its visual toolpath. Click the thumbnail to open a 900 × 800 preview.
+- In the enlarged view, switch between **Isometric** and **Top / XY**, scroll to zoom, drag to pan, or choose **Fit view**. **Rapid travel** shows positioning moves; the default focuses on cutting geometry.
+- **Start job** asks for confirmation before streaming.
 
-Version 1.3.1 adds persistent run order, drag/arrow reordering and explicit run/completion states. The heading/search/refresh block and preview simulator bar have been removed.
+Version 1.4.0 replaces the text preview with an asynchronous visual toolpath thumbnail and an enlarged preview window.

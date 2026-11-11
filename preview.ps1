@@ -15,6 +15,11 @@ if (-not (Test-Path -LiteralPath $Javac)) {
     throw "Java compiler not found at: $Javac"
 }
 
+$ugsRuntime = Join-Path $projectRoot '.upstream\ugs-platform-app-2.1.6\ugsplatform\ugsplatform\modules\ext\com.willwinder.ugs-platform-ugslib'
+$runtimeJars = @(Get-ChildItem -LiteralPath $ugsRuntime -Filter '*.jar' -Recurse | ForEach-Object { $_.FullName })
+if ($runtimeJars.Count -eq 0) { throw "Prepared UGS parser runtime is missing: $ugsRuntime" }
+$runtimeClasspath = (@($verifyDir) + $runtimeJars) -join [IO.Path]::PathSeparator
+
 $sources = @(
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\PluginInfo.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobOrigin.java"),
@@ -22,6 +27,7 @@ $sources = @(
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobAnalysis.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobEntry.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobSource.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\ToolpathLoader.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\GcodeAnalyzer.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\JobLibraryService.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\LanReceiverService.java"),
@@ -32,6 +38,8 @@ $sources = @(
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\UITheme.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\DarkButton.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\JobTableRenderer.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\ToolpathCanvas.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\ToolpathPreviewPanel.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\JobDetailsPanel.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\LocalJobsPanel.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\JobManagerPanel.java"),
@@ -42,24 +50,24 @@ $sources = @(
 
 Write-Host "Compiling UGS Job Manager standalone preview classes..."
 New-Item -ItemType Directory -Force -Path $verifyDir | Out-Null
-& $Javac -encoding UTF-8 -d $verifyDir $sources
+& $Javac -encoding UTF-8 -cp $runtimeClasspath -d $verifyDir $sources
 if ($LASTEXITCODE -ne 0) {
     throw "Compilation failed (exit $LASTEXITCODE)."
 }
 
 Write-Host "Running GcodeAnalyzer unit tests..."
-& $Java -cp $verifyDir com.bashworks.ugs.jobmanager.service.GcodeAnalyzerTest
+& $Java -cp $runtimeClasspath com.bashworks.ugs.jobmanager.service.GcodeAnalyzerTest
 if ($LASTEXITCODE -ne 0) {
     throw "GcodeAnalyzer tests failed."
 }
 
 Write-Host "Running incoming queue tests..."
-& $Java "-Djava.awt.headless=true" -cp $verifyDir com.bashworks.ugs.jobmanager.ui.IncomingQueueTest
+& $Java "-Djava.awt.headless=true" -cp $runtimeClasspath com.bashworks.ugs.jobmanager.ui.IncomingQueueTest
 if ($LASTEXITCODE -ne 0) { throw "Incoming queue tests failed." }
 
 if (-not $TestOnly) {
     Write-Host "Launching G-BASHWARE Job Manager standalone preview..."
     $previewHome = Join-Path $projectRoot ".verify\preview-home"
     New-Item -ItemType Directory -Force -Path $previewHome | Out-Null
-    & $Java "-Duser.home=$previewHome" "-Dugs.jobmanager.httpPort=19876" "-Dugs.jobmanager.udpPort=19875" -cp $verifyDir com.bashworks.ugs.jobmanager.ui.JobManagerStandalone --demo
+    & $Java "-Duser.home=$previewHome" "-Dugs.jobmanager.httpPort=19876" "-Dugs.jobmanager.udpPort=19875" -cp $runtimeClasspath com.bashworks.ugs.jobmanager.ui.JobManagerStandalone --demo
 }

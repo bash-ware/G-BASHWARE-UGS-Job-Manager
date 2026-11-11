@@ -280,5 +280,6 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         gateway.removeListener(this);
         lanService.removeListener(this);
         lanService.stop();
+        detailsPanel.close();
     }
 }

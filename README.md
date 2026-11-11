@@ -1,4 +1,4 @@
-# G-BASHWARE Job Manager 1.3.1 for UGS
+# G-BASHWARE Job Manager 1.4.0 for UGS
 
 [Download the latest release](https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager/releases/latest).
 
@@ -8,7 +8,8 @@ Local incoming-job queue for G-code sent from GcodeMergerSplitter on another com
 - Clear Next, Running, Paused, Stopped and Finished states; completed history stays below pending work.
 - Order and finished states persist. New jobs append; the running job is locked against reordering.
 - Load next prepares the next pending job. Starting remains manual; nothing auto-starts after completion.
-- Job details and G-code preview.
+- Visual toolpath thumbnail replaces the G-code text preview. Click to open a 900 × 800 window with isometric/top views, zoom, pan, fit and optional rapid travel.
+- Geometry is loaded asynchronously with the UGS parser; partial previews are labeled.
 - Ctrl/Shift selection and **Remove selected**; **Clear queue** removes every entry.
 - Compact interface without the heading/search/refresh block or simulator toolbar.
 - Removals persist across refresh and restart. G-code files remain on disk and the active UGS job is unaffected.
