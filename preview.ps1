@@ -24,8 +24,8 @@ $sources = @(
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobSource.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\GcodeAnalyzer.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\JobLibraryService.java"),
-    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\WebJobService.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\LanReceiverService.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\IncomingJobQueue.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\JobManagerListener.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\JobManagerGateway.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\SimulatedJobManagerGateway.java"),
@@ -34,9 +34,9 @@ $sources = @(
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\JobTableRenderer.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\JobDetailsPanel.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\LocalJobsPanel.java"),
-    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\WebJobsPanel.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\JobManagerPanel.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\test\java\com\bashworks\ugs\jobmanager\service\GcodeAnalyzerTest.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\test\java\com\bashworks\ugs\jobmanager\ui\IncomingQueueTest.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\test\java\com\bashworks\ugs\jobmanager\ui\JobManagerStandalone.java")
 )
 
@@ -53,7 +53,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "GcodeAnalyzer tests failed."
 }
 
+Write-Host "Running incoming queue tests..."
+& $Java "-Djava.awt.headless=true" -cp $verifyDir com.bashworks.ugs.jobmanager.ui.IncomingQueueTest
+if ($LASTEXITCODE -ne 0) { throw "Incoming queue tests failed." }
+
 if (-not $TestOnly) {
     Write-Host "Launching G-BASHWARE Job Manager standalone preview..."
-    & $Java -cp $verifyDir com.bashworks.ugs.jobmanager.ui.JobManagerStandalone
+    $previewHome = Join-Path $projectRoot ".verify\preview-home"
+    New-Item -ItemType Directory -Force -Path $previewHome | Out-Null
+    & $Java "-Duser.home=$previewHome" "-Dugs.jobmanager.httpPort=19876" "-Dugs.jobmanager.udpPort=19875" -cp $verifyDir com.bashworks.ugs.jobmanager.ui.JobManagerStandalone --demo
 }

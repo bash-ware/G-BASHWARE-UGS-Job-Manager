@@ -1,44 +1,27 @@
-# G-BASHWARE Job Manager — Installation Guide
+# G-BASHWARE Job Manager 1.2.0 — Installation
 
 ## Requirements
-* **Universal Gcode Sender (UGS) Platform 2.1.6** (or newer)
-* **Java Runtime 17+** (JDK 17 to JDK 22 supported)
 
----
+- Universal Gcode Sender (UGS) Platform 2.1.6
+- Java 17 or newer
 
-## Installation via NBM Plugin File
+## Install or update
 
-1. In UGS Platform, open the top menu:
-   **Tools → Plugins**
-2. In the Plugins manager dialog, select the **Downloaded** tab.
-3. Click the **Add Plugins...** button.
-4. Select the provided `.nbm` file:
-   `G-BASHWARE-Job-Manager-for-UGS-2.1.6.nbm`
-5. Click **Install** at the bottom left.
-6. Follow the installation wizard steps, accept the license, and click **Finish**.
-7. Restart UGS Platform when prompted.
+1. Download `G-BASHWARE-Job-Manager-for-UGS-2.1.6.nbm` from the [latest release](https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager/releases/latest).
+2. In UGS, open **Tools → Plugins → Downloaded → Add Plugins** and select the NBM.
+3. Install the update and restart UGS when prompted.
+4. Open **Window → Plugins → G-BASHWARE Job Manager**.
 
----
+If you already use the project's NetBeans update center, check for updates in **Tools → Plugins → Updates**.
 
-## Opening the Plugin Window
+## Receive and manage jobs
 
-Once installed and restarted:
-* The plugin window automatically docks into your UGS layout (by default docked next to the Visualizer or Editor Secondary pane).
-* If closed, you can reopen it anytime from the top menu:
-  **Window → Plugins → G-BASHWARE Job Manager**
+- Send G-code from GcodeMergerSplitter on the other computer over the local network. Discovery uses UDP 9875; the upload receiver uses HTTP 9876. Both computers must be able to reach those ports.
+- Received files appear in **Incoming jobs** and are saved in `~/.ugs-job-manager/incoming/`.
+- **Load on receive** controls automatic loading into UGS. Double-click a job or choose **Load into UGS** to load manually.
+- Search by filename. Use Ctrl/Shift to select several jobs, then **Remove selected**.
+- **Clear queue** removes every queue entry, including entries hidden by search.
+- Queue removals persist across refresh and restart. They preserve files on disk and do not stop or unload an active UGS job. Sending a job again queues it again.
+- Select a job to inspect dimensions, tools, feed, spindle and G-code. **Start job** asks for confirmation before streaming.
 
----
-
-## Quick Usage
-
-### 1. Local Disk Library
-* Set your default CNC jobs folder using the **Browse...** button.
-* Toggle **Include Subfolders** to scan nested project folders.
-* Use the **Filter** field to search through hundreds of files instantly.
-* Double-click any job in the table or click **⚡ Load into UGS (Activate)** to immediately send it to UGS, parse toolpaths, and prepare the machine.
-* Drag-and-drop any `.gcode`, `.nc`, `.ngc`, or `.tap` file from Windows Explorer straight into the panel.
-
-### 2. Web & Remote Jobs
-* Switch to the **🌐 Web Download** tab.
-* Enter a direct URL to a G-code file or select one of the presets.
-* Click **⚡ Download & Activate in UGS** to fetch, parse dimensions, cache locally, and activate in UGS in one step!
+Version 1.2.0 removes the Web Download tab and folder browser in favor of the incoming LAN queue.

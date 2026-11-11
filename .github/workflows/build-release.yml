@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 env:
-  JOB_MANAGER_VERSION: 1.1.0
+  JOB_MANAGER_VERSION: 1.2.0
   UGS_VERSION: 2.1.6
 
 jobs:
@@ -71,7 +71,12 @@ jobs:
 
       - name: Build and test
         shell: bash
-        run: mvn --batch-mode -f ugs-job-manager/pom.xml clean package
+        run: |
+          set -euo pipefail
+          mvn --batch-mode -f ugs-job-manager/pom.xml clean package
+          test_classpath="ugs-job-manager/target/test-classes:ugs-job-manager/target/classes"
+          java -cp "$test_classpath" com.bashworks.ugs.jobmanager.service.GcodeAnalyzerTest
+          java -Djava.awt.headless=true -cp "$test_classpath" com.bashworks.ugs.jobmanager.ui.IncomingQueueTest
 
       - name: Package downloads and update catalog
         shell: bash
@@ -132,4 +137,4 @@ jobs:
           cp "$publish_dir"/*.nbm "$publish_dir"/*.xml "$publish_dir"/*.gz "$publish_dir/repo/"
           git -C "$publish_dir/repo" add .
           git -C "$publish_dir/repo" commit -m "Publish Job Manager ${JOB_MANAGER_VERSION} update center"
-          git -C "$publish_dir/repo" push --force origin HEAD:update-center
+          git -C "$publish_dir/repo" push origin HEAD:update-center

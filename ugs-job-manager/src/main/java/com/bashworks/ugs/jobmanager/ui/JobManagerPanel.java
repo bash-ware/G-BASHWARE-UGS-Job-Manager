@@ -5,9 +5,9 @@ import com.bashworks.ugs.jobmanager.machine.JobManagerGateway;
 import com.bashworks.ugs.jobmanager.machine.JobManagerListener;
 import com.bashworks.ugs.jobmanager.model.JobEntry;
 import com.bashworks.ugs.jobmanager.service.GcodeAnalyzer;
-import com.bashworks.ugs.jobmanager.service.JobLibraryService;
+
 import com.bashworks.ugs.jobmanager.service.LanReceiverService;
-import com.bashworks.ugs.jobmanager.service.WebJobService;
+
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -16,7 +16,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
-import javax.swing.JTabbedPane;
+
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -25,36 +25,35 @@ import java.awt.FlowLayout;
 import java.io.File;
 
 /**
- * Master UI panel for G-BASHWARE Job Manager. Contains navigation tabs for local
- * disk library, web downloads, zero-config LAN receiver, and persistent machine status.
+ * Incoming LAN queue, job inspector, and persistent machine status.
  */
 public class JobManagerPanel extends JPanel implements JobManagerListener, LanReceiverService.LanListener {
 
     private final JobManagerGateway gateway;
     private final GcodeAnalyzer analyzer;
-    private final JobLibraryService libraryService;
-    private final WebJobService webService;
+
+
     private final LanReceiverService lanService;
 
     // Header controls
     private final JLabel machineStatusBadge = UITheme.createBadge("DISCONNECTED", UITheme.BG_CARD_ALT, UITheme.TEXT_MUTED);
-    private final JLabel lanLedBadge = UITheme.createBadge("● GCODE MERGER SEARCHING...", new Color(0x35, 0x1E, 0x22), UITheme.ACCENT_RED);
-    private final JCheckBox chkAutoActivate = new JCheckBox("Auto-Load");
+    private final JLabel lanLedBadge = UITheme.createBadge("● WAITING FOR SENDER", new Color(0x35, 0x1E, 0x22), UITheme.ACCENT_RED);
+    private final JCheckBox chkAutoActivate = new JCheckBox("Load on receive");
     private final JLabel activeJobLabel = new JLabel("No Job Loaded in UGS");
-    private final DarkButton btnReloadActive = new DarkButton("🔄 Reload", DarkButton.ButtonStyle.SECONDARY);
-    private final DarkButton btnUnloadActive = new DarkButton("✕ Unload", DarkButton.ButtonStyle.SECONDARY);
+    private final DarkButton btnReloadActive = new DarkButton("Reload", DarkButton.ButtonStyle.SECONDARY);
+    private final DarkButton btnUnloadActive = new DarkButton("Unload", DarkButton.ButtonStyle.SECONDARY);
 
     // Sub-panels
     private final LocalJobsPanel localPanel;
-    private final WebJobsPanel webPanel;
+
     private final JobDetailsPanel detailsPanel;
-    private final JTabbedPane tabbedPane;
+
 
     public JobManagerPanel(JobManagerGateway gateway) {
         this.gateway = gateway;
         this.analyzer = new GcodeAnalyzer();
-        this.libraryService = new JobLibraryService(null, analyzer);
-        this.webService = new WebJobService(null, analyzer);
+
+
         this.lanService = new LanReceiverService(gateway, analyzer, null);
 
         setLayout(new BorderLayout(0, 4));
@@ -68,33 +67,19 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         this.detailsPanel = new JobDetailsPanel(gateway, analyzer);
 
         this.localPanel = new LocalJobsPanel(
-                libraryService,
+                lanService.getIncomingDirectory(),
                 gateway,
                 job -> detailsPanel.setJob(job),
                 this::activateJobDirectly
         );
 
-        this.webPanel = new WebJobsPanel(
-                webService,
-                gateway,
-                job -> detailsPanel.setJob(job),
-                this::activateJobDirectly
-        );
-
-        // Tabs
-        tabbedPane = new JTabbedPane();
-        tabbedPane.setFont(UITheme.FONT_BODY_BOLD);
-        tabbedPane.setBackground(UITheme.BG_CARD);
-        tabbedPane.setForeground(UITheme.TEXT_PRIMARY);
-        tabbedPane.addTab("📁 Local Library", localPanel);
-        tabbedPane.addTab("🌐 Web Download", webPanel);
-
-        // Split Pane (Left: Sources Tabs, Right: Job Details Inspector)
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, tabbedPane, detailsPanel);
+        // Incoming queue and selected job inspector.
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, localPanel, detailsPanel);
         splitPane.setResizeWeight(0.60);
-        splitPane.setDividerSize(6);
+        splitPane.setDividerSize(1);
+        splitPane.setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
         splitPane.setBackground(UITheme.BG_DARK);
-        splitPane.setBorder(BorderFactory.createEmptyBorder(2, 4, 4, 4));
+
         add(splitPane, BorderLayout.CENTER);
 
         // Wire listener
@@ -107,19 +92,19 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
     }
 
     private JPanel createHeaderBanner() {
-        JPanel banner = new JPanel(new BorderLayout(8, 0));
+        JPanel banner = new JPanel(new BorderLayout(8, 14));
         banner.setBackground(UITheme.BG_CARD);
         banner.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER_COLOR),
-                BorderFactory.createEmptyBorder(6, 12, 6, 12)
+                BorderFactory.createEmptyBorder(20, 24, 16, 24)
         ));
 
         // Left title & machine status & LAN link LED
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         left.setOpaque(false);
 
-        JLabel title = new JLabel(PluginInfo.TITLE);
-        title.setFont(UITheme.FONT_HEADER);
+        JLabel title = new JLabel("Job Manager");
+        title.setFont(UITheme.FONT_TITLE);
         title.setForeground(UITheme.TEXT_PRIMARY);
         left.add(title);
         left.add(machineStatusBadge);
@@ -136,7 +121,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         banner.add(left, BorderLayout.WEST);
 
         // Right active job & quick actions
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         right.setOpaque(false);
 
         activeJobLabel.setFont(UITheme.FONT_BODY_BOLD);
@@ -165,7 +150,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         });
         right.add(btnUnloadActive);
 
-        banner.add(right, BorderLayout.EAST);
+        banner.add(right, BorderLayout.SOUTH);
         return banner;
     }
 
@@ -205,7 +190,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         if (file != null && file.exists()) {
             activeJobLabel.setText("Active: " + file.getName());
             activeJobLabel.setForeground(UITheme.ACCENT_TEAL);
-            btnReloadActive.setEnabled(true);
+            btnReloadActive.setEnabled(!gateway.isSendingFile());
             btnUnloadActive.setEnabled(!gateway.isSendingFile());
         } else {
             activeJobLabel.setText("No Job in UGS");
@@ -215,7 +200,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         }
 
         localPanel.refreshActiveFile(file);
-        webPanel.refreshActiveFile(file);
+
         detailsPanel.refreshActiveState(file);
     }
 
@@ -232,28 +217,28 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
 
     @Override
     public void onMachineConnectionChanged(boolean connected) {
-        SwingUtilities.invokeLater(this::updateHeaderStatus);
+        SwingUtilities.invokeLater(() -> { updateHeaderStatus(); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
     }
 
     @Override
     public void onMachineStateChanged(String stateName, boolean isIdle, boolean isSending) {
-        SwingUtilities.invokeLater(this::updateHeaderStatus);
+        SwingUtilities.invokeLater(() -> { updateHeaderStatus(); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
     }
 
     @Override
     public void onStreamStateChanged(boolean isStreaming, boolean isPaused) {
-        SwingUtilities.invokeLater(this::updateHeaderStatus);
+        SwingUtilities.invokeLater(() -> { updateHeaderStatus(); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
     }
 
     @Override
     public void onClientLinkChanged(boolean linked, String clientIp) {
         SwingUtilities.invokeLater(() -> {
             if (linked) {
-                lanLedBadge.setText("● GCODE MERGER: " + clientIp);
+                lanLedBadge.setText("● SENDER: " + clientIp);
                 lanLedBadge.setForeground(UITheme.ACCENT_TEAL);
                 lanLedBadge.setToolTipText("Connected to GcodeMergerSplitter at " + clientIp);
             } else {
-                lanLedBadge.setText("● GCODE MERGER SEARCHING...");
+                lanLedBadge.setText("● WAITING FOR SENDER");
                 lanLedBadge.setForeground(UITheme.ACCENT_RED);
                 lanLedBadge.setToolTipText("Listening on UDP 9875 and HTTP 9876. Waiting for GcodeMergerSplitter...");
             }

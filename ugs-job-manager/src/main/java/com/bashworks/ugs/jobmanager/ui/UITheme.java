@@ -17,15 +17,15 @@ import java.awt.RenderingHints;
  */
 public final class UITheme {
 
-    public static final Color BG_DARK = new Color(0x1B, 0x1C, 0x22);
-    public static final Color BG_PANEL = new Color(0x23, 0x24, 0x2C);
-    public static final Color BG_CARD = new Color(0x2C, 0x2D, 0x38);
-    public static final Color BG_CARD_ALT = new Color(0x34, 0x36, 0x44);
+    public static final Color BG_DARK = new Color(0x10, 0x13, 0x19);
+    public static final Color BG_PANEL = new Color(0x18, 0x1D, 0x25);
+    public static final Color BG_CARD = new Color(0x20, 0x26, 0x30);
+    public static final Color BG_CARD_ALT = new Color(0x2A, 0x32, 0x3F);
     public static final Color BG_INPUT = new Color(0x16, 0x17, 0x1D);
 
     public static final Color TEXT_PRIMARY = new Color(0xF2, 0xF4, 0xF8);
     public static final Color TEXT_SECONDARY = new Color(0xAE, 0xB3, 0xC2);
-    public static final Color TEXT_MUTED = new Color(0x71, 0x76, 0x88);
+    public static final Color TEXT_MUTED = new Color(0x94, 0xA0, 0xB2);
 
     public static final Color ACCENT_CYAN = new Color(0x00, 0xB4, 0xD8);
     public static final Color ACCENT_TEAL = new Color(0x06, 0xD6, 0xA0);
@@ -33,16 +33,16 @@ public final class UITheme {
     public static final Color ACCENT_RED = new Color(0xEF, 0x47, 0x6F);
     public static final Color ACCENT_BLUE = new Color(0x11, 0x8A, 0xB2);
 
-    public static final Color BORDER_COLOR = new Color(0x3A, 0x3D, 0x4D);
+    public static final Color BORDER_COLOR = new Color(0x30, 0x39, 0x47);
     public static final Color BORDER_ACTIVE = new Color(0x00, 0xB4, 0xD8);
 
-    public static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 15);
-    public static final Font FONT_HEADER = new Font("Segoe UI", Font.BOLD, 13);
-    public static final Font FONT_BODY = new Font("Segoe UI", Font.PLAIN, 12);
-    public static final Font FONT_BODY_BOLD = new Font("Segoe UI", Font.BOLD, 12);
-    public static final Font FONT_SMALL = new Font("Segoe UI", Font.PLAIN, 11);
-    public static final Font FONT_SMALL_BOLD = new Font("Segoe UI", Font.BOLD, 11);
-    public static final Font FONT_CODE = new Font("Consolas", Font.PLAIN, 12);
+    public static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 22);
+    public static final Font FONT_HEADER = new Font("Segoe UI", Font.BOLD, 15);
+    public static final Font FONT_BODY = new Font("Segoe UI", Font.PLAIN, 13);
+    public static final Font FONT_BODY_BOLD = new Font("Segoe UI", Font.BOLD, 13);
+    public static final Font FONT_SMALL = new Font("Segoe UI", Font.PLAIN, 12);
+    public static final Font FONT_SMALL_BOLD = new Font("Segoe UI", Font.BOLD, 12);
+    public static final Font FONT_CODE = new Font("Consolas", Font.PLAIN, 13);
 
     private UITheme() {
     }

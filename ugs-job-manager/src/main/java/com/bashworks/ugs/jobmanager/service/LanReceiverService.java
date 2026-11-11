@@ -52,6 +52,8 @@ public final class LanReceiverService {
     private final File incomingDirectory;
     private final List<LanListener> listeners = new CopyOnWriteArrayList<>();
 
+    private final int httpPort = Integer.getInteger("ugs.jobmanager.httpPort", DEFAULT_HTTP_PORT);
+    private final int udpPort = Integer.getInteger("ugs.jobmanager.udpPort", DEFAULT_UDP_PORT);
     private HttpServer httpServer;
     private DatagramSocket udpSocket;
     private Thread udpListenerThread;
@@ -125,7 +127,7 @@ public final class LanReceiverService {
 
     private void startHttpServer() {
         try {
-            httpServer = HttpServer.create(new InetSocketAddress(DEFAULT_HTTP_PORT), 0);
+            httpServer = HttpServer.create(new InetSocketAddress(httpPort), 0);
             httpServer.createContext("/api/status", new StatusHandler());
             httpServer.createContext("/api/jobs/upload", new UploadHandler());
             httpServer.setExecutor(Executors.newCachedThreadPool(r -> {
@@ -135,7 +137,7 @@ public final class LanReceiverService {
             }));
             httpServer.start();
         } catch (IOException e) {
-            System.err.println("Failed to start UGS Job Manager HTTP server on port " + DEFAULT_HTTP_PORT + ": " + e.getMessage());
+            System.err.println("Failed to start UGS Job Manager HTTP server on port " + httpPort + ": " + e.getMessage());
         }
     }
 
@@ -143,7 +145,7 @@ public final class LanReceiverService {
         try {
             udpSocket = new DatagramSocket(null);
             udpSocket.setReuseAddress(true);
-            udpSocket.bind(new InetSocketAddress(DEFAULT_UDP_PORT));
+            udpSocket.bind(new InetSocketAddress(udpPort));
 
             udpListenerThread = new Thread(() -> {
                 byte[] buffer = new byte[2048];
@@ -160,14 +162,14 @@ public final class LanReceiverService {
                             String activeJob = gateway.getActiveGcodeFile() != null ? gateway.getActiveGcodeFile().getName() : "";
                             String jsonResponse = String.format(Locale.US,
                                     "{\"event\":\"DISCOVERY_PONG\",\"server\":\"G-BASHWARE-Job-Manager\",\"httpPort\":%d,\"machineState\":\"%s\",\"activeJob\":\"%s\"}",
-                                    DEFAULT_HTTP_PORT, gateway.getControllerStateName(), escapeJson(activeJob));
+                                    httpPort, gateway.getControllerStateName(), escapeJson(activeJob));
 
                             byte[] respBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
                             DatagramPacket responsePacket = new DatagramPacket(respBytes, respBytes.length, packet.getAddress(), packet.getPort());
                             udpSocket.send(responsePacket);
 
                             try {
-                                DatagramPacket bcast = new DatagramPacket(respBytes, respBytes.length, InetAddress.getByName("255.255.255.255"), DEFAULT_UDP_PORT);
+                                DatagramPacket bcast = new DatagramPacket(respBytes, respBytes.length, InetAddress.getByName("255.255.255.255"), udpPort);
                                 udpSocket.send(bcast);
                             } catch (Exception ignored) {}
                         }
@@ -179,7 +181,7 @@ public final class LanReceiverService {
             udpListenerThread.setDaemon(true);
             udpListenerThread.start();
         } catch (Exception ex) {
-            System.err.println("Failed to bind UDP discovery port " + DEFAULT_UDP_PORT + ": " + ex.getMessage());
+            System.err.println("Failed to bind UDP discovery port " + udpPort + ": " + ex.getMessage());
         }
     }
 
@@ -268,7 +270,7 @@ public final class LanReceiverService {
                 } catch (Exception ignored) {}
 
                 String json = String.format(Locale.US,
-                        "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.1.0\",\"connected\":true," +
+                        "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.2.0\",\"connected\":true," +
                         "\"machineConnected\":%b,\"machineState\":\"%s\",\"isIdle\":%b,\"isSending\":%b," +
                         "\"activeJob\":\"%s\"}",
                         isConn, state != null ? state : "UNKNOWN", isIdle, isSending,

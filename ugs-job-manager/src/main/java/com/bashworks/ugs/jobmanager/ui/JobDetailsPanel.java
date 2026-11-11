@@ -37,7 +37,7 @@ public class JobDetailsPanel extends JPanel {
     private final GcodeAnalyzer analyzer;
     private JobEntry currentJob;
 
-    private final JLabel titleLabel = new JLabel("No Job Selected");
+    private final JLabel titleLabel = new JLabel("Select a job");
     private final JLabel sourceBadge = UITheme.createBadge("NONE", UITheme.BG_CARD_ALT, UITheme.TEXT_MUTED);
     private final JLabel activeBadge = UITheme.createBadge("INACTIVE", UITheme.BG_CARD_ALT, UITheme.TEXT_MUTED);
     private final JLabel feedbackLabel = new JLabel(" ");
@@ -57,31 +57,32 @@ public class JobDetailsPanel extends JPanel {
     private final JScrollPane previewScrollPane;
 
     // Action buttons
-    private final DarkButton btnActivate = new DarkButton("⚡ Load into UGS (Activate)", DarkButton.ButtonStyle.PRIMARY);
-    private final DarkButton btnRun = new DarkButton("▶ Start in UGS", DarkButton.ButtonStyle.ACCENT);
-    private final DarkButton btnUnload = new DarkButton("✕ Unload", DarkButton.ButtonStyle.SECONDARY);
-    private final DarkButton btnExplorer = new DarkButton("📂 Show in Folder", DarkButton.ButtonStyle.SECONDARY);
-    private final DarkButton btnCopyPath = new DarkButton("📋 Copy Path", DarkButton.ButtonStyle.SECONDARY);
+    private final DarkButton btnActivate = new DarkButton("Load into UGS", DarkButton.ButtonStyle.PRIMARY);
+    private final DarkButton btnRun = new DarkButton("Start job", DarkButton.ButtonStyle.ACCENT);
+    private final DarkButton btnUnload = new DarkButton("Unload", DarkButton.ButtonStyle.SECONDARY);
+    private final DarkButton btnExplorer = new DarkButton("Show folder", DarkButton.ButtonStyle.SECONDARY);
+    private final DarkButton btnCopyPath = new DarkButton("Copy path", DarkButton.ButtonStyle.SECONDARY);
 
     public JobDetailsPanel(JobManagerGateway gateway, GcodeAnalyzer analyzer) {
         this.gateway = gateway;
         this.analyzer = analyzer != null ? analyzer : new GcodeAnalyzer();
 
-        setLayout(new BorderLayout(8, 8));
+        setMinimumSize(new Dimension(340, 300));
+        setLayout(new BorderLayout(8, 16));
         setBackground(UITheme.BG_PANEL);
-        setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        setBorder(BorderFactory.createEmptyBorder(22, 22, 18, 22));
 
         // Header Panel
         JPanel headerPanel = new JPanel(new BorderLayout(8, 4));
         headerPanel.setOpaque(false);
 
-        JPanel titleRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        JPanel titleRow = new JPanel(new BorderLayout());
         titleRow.setOpaque(false);
-        titleLabel.setFont(UITheme.FONT_TITLE);
+        titleLabel.setFont(UITheme.FONT_HEADER);
         titleLabel.setForeground(UITheme.TEXT_PRIMARY);
         titleRow.add(titleLabel);
-        titleRow.add(sourceBadge);
-        titleRow.add(activeBadge);
+
+        headerPanel.add(activeBadge, BorderLayout.EAST);
 
         headerPanel.add(titleRow, BorderLayout.NORTH);
 
@@ -90,13 +91,12 @@ public class JobDetailsPanel extends JPanel {
         headerPanel.add(feedbackLabel, BorderLayout.SOUTH);
 
         // Center: Stats grid + Preview
-        JPanel centerPanel = new JPanel();
-        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        JPanel centerPanel = new JPanel(new BorderLayout(0, 10));
         centerPanel.setOpaque(false);
 
         JPanel statsCard = createStatsGrid();
-        centerPanel.add(statsCard);
-        centerPanel.add(Box.createVerticalStrut(8));
+        statsCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 280));
+        centerPanel.add(statsCard, BorderLayout.NORTH);
 
         // Preview Card
         JPanel previewCard = new JPanel(new BorderLayout(4, 4));
@@ -106,7 +106,7 @@ public class JobDetailsPanel extends JPanel {
                 BorderFactory.createEmptyBorder(6, 8, 6, 8)
         ));
 
-        JLabel previewHeader = new JLabel("G-Code Header Preview (First 50 lines):");
+        JLabel previewHeader = new JLabel("G-CODE PREVIEW  /  FIRST 50 LINES");
         previewHeader.setFont(UITheme.FONT_SMALL_BOLD);
         previewHeader.setForeground(UITheme.TEXT_SECONDARY);
         previewCard.add(previewHeader, BorderLayout.NORTH);
@@ -122,16 +122,22 @@ public class JobDetailsPanel extends JPanel {
         previewScrollPane.setBorder(BorderFactory.createLineBorder(UITheme.BORDER_COLOR, 1));
         previewCard.add(previewScrollPane, BorderLayout.CENTER);
 
-        centerPanel.add(previewCard);
+        centerPanel.add(previewCard, BorderLayout.CENTER);
 
         // Buttons Panel
-        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        JPanel actionsPanel = new JPanel(new java.awt.GridLayout(0, 1, 0, 8));
+        JPanel primaryActions = new JPanel(new java.awt.GridLayout(1, 2, 8, 0));
+        primaryActions.setOpaque(false);
+        JPanel secondaryActions = new JPanel(new java.awt.GridLayout(1, 3, 8, 0));
+        secondaryActions.setOpaque(false);
         actionsPanel.setOpaque(false);
-        actionsPanel.add(btnActivate);
-        actionsPanel.add(btnRun);
-        actionsPanel.add(btnUnload);
-        actionsPanel.add(btnExplorer);
-        actionsPanel.add(btnCopyPath);
+        primaryActions.add(btnActivate);
+        primaryActions.add(btnRun);
+        secondaryActions.add(btnUnload);
+        secondaryActions.add(btnExplorer);
+        secondaryActions.add(btnCopyPath);
+        actionsPanel.add(primaryActions);
+        actionsPanel.add(secondaryActions);
 
         add(headerPanel, BorderLayout.NORTH);
         add(centerPanel, BorderLayout.CENTER);
@@ -142,58 +148,39 @@ public class JobDetailsPanel extends JPanel {
     }
 
     private JPanel createStatsGrid() {
-        JPanel card = new JPanel(new GridBagLayout());
+        JPanel card = new JPanel(new BorderLayout(0, 14));
         card.setBackground(UITheme.BG_CARD);
-        card.setBorder(BorderFactory.createCompoundBorder(
-                new UITheme.RoundedBorder(UITheme.BORDER_COLOR, 8),
-                BorderFactory.createEmptyBorder(8, 10, 8, 10)
-        ));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(3, 4, 3, 12);
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.fill = GridBagConstraints.NONE;
-
-        // Row 0
-        addStatCell(card, gbc, 0, 0, "Dimensions:", valDimensions);
-        addStatCell(card, gbc, 2, 0, "Line Count:", valLines);
-        addStatCell(card, gbc, 4, 0, "File Size:", valSize);
-
-        // Row 1
-        addStatCell(card, gbc, 0, 1, "Tools Used:", valTools);
-        addStatCell(card, gbc, 2, 1, "Spindle Speed:", valSpindle);
-        addStatCell(card, gbc, 4, 1, "Max Feed Rate:", valFeed);
-
-        // Row 2 (Spanning)
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        JLabel lblRange = new JLabel("Motion Range:");
-        lblRange.setFont(UITheme.FONT_SMALL_BOLD);
-        lblRange.setForeground(UITheme.TEXT_MUTED);
-        card.add(lblRange, gbc);
-
-        gbc.gridx = 1;
-        gbc.gridwidth = 5;
+        card.setBorder(BorderFactory.createCompoundBorder(new UITheme.RoundedBorder(UITheme.BORDER_COLOR, 12),
+                BorderFactory.createEmptyBorder(14, 16, 14, 16)));
+        JPanel grid = new JPanel(new java.awt.GridLayout(0, 2, 20, 14));
+        grid.setOpaque(false);
+        addMetric(grid, "DIMENSIONS", valDimensions);
+        addMetric(grid, "LINES / MOTION", valLines);
+        addMetric(grid, "TOOLS", valTools);
+        addMetric(grid, "SPINDLE", valSpindle);
+        addMetric(grid, "MAX FEED", valFeed);
+        addMetric(grid, "FILE SIZE", valSize);
+        card.add(grid, BorderLayout.CENTER);
         valRange.setFont(UITheme.FONT_SMALL);
         valRange.setForeground(UITheme.TEXT_SECONDARY);
-        card.add(valRange, gbc);
-
+        card.add(valRange, BorderLayout.SOUTH);
         return card;
     }
 
-    private void addStatCell(JPanel panel, GridBagConstraints gbc, int col, int row, String label, JLabel valLabel) {
-        gbc.gridx = col;
-        gbc.gridy = row;
-        gbc.gridwidth = 1;
-        JLabel l = new JLabel(label);
-        l.setFont(UITheme.FONT_SMALL_BOLD);
-        l.setForeground(UITheme.TEXT_MUTED);
-        panel.add(l, gbc);
+    private void addMetric(JPanel grid, String caption, JLabel value) {
+        JPanel metric = new JPanel(new BorderLayout(0, 5));
+        metric.setOpaque(false);
+        metric.add(UITheme.createMutedLabel(caption), BorderLayout.NORTH);
+        value.setFont(UITheme.FONT_BODY_BOLD);
+        value.setForeground(UITheme.TEXT_PRIMARY);
+        metric.add(value, BorderLayout.CENTER);
+        grid.add(metric);
+    }
 
-        gbc.gridx = col + 1;
-        valLabel.setFont(UITheme.FONT_BODY_BOLD);
-        valLabel.setForeground(UITheme.TEXT_PRIMARY);
-        panel.add(valLabel, gbc);
+    private static String rangeLine(String axis, double min, double max, String unit) {
+        return Double.isFinite(min) && Double.isFinite(max)
+                ? String.format(java.util.Locale.US, "%s  %.2f to %.2f %s", axis, min, max, unit)
+                : axis + "  No motion recorded";
     }
 
     private void setupListeners() {
@@ -224,7 +211,8 @@ public class JobDetailsPanel extends JPanel {
 
     private void updateUIState() {
         if (currentJob == null) {
-            titleLabel.setText("No Job Selected");
+            feedbackLabel.setText("Choose a queued job to inspect its G-code.");
+            titleLabel.setText("Select a job");
             sourceBadge.setText("NONE");
             activeBadge.setText("INACTIVE");
             valDimensions.setText("—");
@@ -244,7 +232,9 @@ public class JobDetailsPanel extends JPanel {
             return;
         }
 
+        feedbackLabel.setText(" ");
         titleLabel.setText(currentJob.getName());
+        titleLabel.setToolTipText(currentJob.getName());
         sourceBadge.setText(currentJob.getOrigin().getLabel().toUpperCase());
         sourceBadge.setForeground(UITheme.ACCENT_CYAN);
 
@@ -266,8 +256,11 @@ public class JobDetailsPanel extends JPanel {
         JobAnalysis a = currentJob.getAnalysis();
         if (a != null) {
             valDimensions.setText(a.getBounds().toDimensionsString(a.getUnits()));
-            valRange.setText(a.getBounds().toDetailedRangeString(a.getUnits()));
-            valLines.setText(String.format("%,d (Motion: %,d)", a.getTotalLines(), a.getMotionLines()));
+            JobBounds bounds = a.getBounds();
+            valRange.setText("<html>" + rangeLine("X", bounds.getMinX(), bounds.getMaxX(), a.getUnits()) + "<br>"
+                    + rangeLine("Y", bounds.getMinY(), bounds.getMaxY(), a.getUnits()) + "<br>"
+                    + rangeLine("Z", bounds.getMinZ(), bounds.getMaxZ(), a.getUnits()) + "</html>");
+            valLines.setText(String.format("%,d / %,d", a.getTotalLines(), a.getMotionLines()));
             valTools.setText(a.getToolsSummary());
             valSpindle.setText(a.getSpindleSummary());
             valFeed.setText(a.getFeedRateSummary());
@@ -292,10 +285,10 @@ public class JobDetailsPanel extends JPanel {
 
         valSize.setText(currentJob.getFormattedSize());
 
-        btnActivate.setEnabled(true);
+        btnActivate.setEnabled(!gateway.isSendingFile());
         btnExplorer.setEnabled(currentJob.getFile().exists());
         btnCopyPath.setEnabled(true);
-        btnUnload.setEnabled(isActive);
+        btnUnload.setEnabled(isActive && !gateway.isSendingFile());
 
         boolean canRun = isActive && gateway.isConnected() && gateway.isIdle() && !gateway.isSendingFile();
         btnRun.setEnabled(canRun);

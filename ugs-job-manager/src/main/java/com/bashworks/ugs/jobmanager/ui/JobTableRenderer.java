@@ -15,7 +15,7 @@ import java.awt.Component;
 public class JobTableRenderer extends DefaultTableCellRenderer {
 
     private static final Color BG_EVEN = UITheme.BG_PANEL;
-    private static final Color BG_ODD = new Color(0x28, 0x2A, 0x33);
+    private static final Color BG_ODD = new Color(0x1C, 0x22, 0x2C);
     private static final Color BG_SELECTED = new Color(0x35, 0x48, 0x5E);
 
     @Override
@@ -26,6 +26,7 @@ public class JobTableRenderer extends DefaultTableCellRenderer {
 
         if (c instanceof JLabel) {
             JLabel label = (JLabel) c;
+            label.setHorizontalAlignment(LEFT);
             label.setFont(UITheme.FONT_BODY);
             label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
 

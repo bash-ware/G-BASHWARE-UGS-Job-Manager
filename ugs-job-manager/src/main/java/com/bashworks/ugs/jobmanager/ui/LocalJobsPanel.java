@@ -2,426 +2,201 @@ package com.bashworks.ugs.jobmanager.ui;
 
 import com.bashworks.ugs.jobmanager.machine.JobManagerGateway;
 import com.bashworks.ugs.jobmanager.model.JobEntry;
-import com.bashworks.ugs.jobmanager.model.JobOrigin;
-import com.bashworks.ugs.jobmanager.service.JobLibraryService;
-
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.table.DefaultTableModel;
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.dnd.DnDConstants;
-import java.awt.dnd.DropTarget;
-import java.awt.dnd.DropTargetAdapter;
-import java.awt.dnd.DropTargetDropEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import com.bashworks.ugs.jobmanager.service.IncomingJobQueue;
+import javax.swing.*;
+import javax.swing.event.*;
+import javax.swing.table.*;
+import java.awt.*;
+import java.awt.event.*;
 import java.io.File;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.Consumer;
 
-/**
- * Local file system browser and job catalog panel with folder watching,
- * fast search, drag-and-drop, and recent file history.
- */
+/** Local inbox for jobs sent by the other computer. */
 public class LocalJobsPanel extends JPanel {
-
-    private final JobLibraryService libraryService;
+    private final IncomingJobQueue queue;
     private final JobManagerGateway gateway;
-    private final Consumer<JobEntry> onJobSelected;
-    private final Consumer<JobEntry> onJobActivateRequested;
-
-    private final JTextField dirField = new JTextField();
-    private final JCheckBox chkRecursive = new JCheckBox("Include Subfolders");
-    private final JTextField searchField = new JTextField(14);
-    private final JLabel countLabel = new JLabel("0 jobs");
-
-    private final DefaultTableModel tableModel;
-    private final JTable jobsTable;
+    private final Consumer<JobEntry> onSelected;
+    private final Consumer<JobEntry> onActivate;
     private final List<JobEntry> allJobs = new ArrayList<>();
-    private final List<JobEntry> filteredJobs = new ArrayList<>();
+    private final List<JobEntry> visibleJobs = new ArrayList<>();
+    private final JTextField search = new JTextField();
+    private final JLabel count = UITheme.createMutedLabel("0 jobs");
+    private final JLabel empty = UITheme.createMutedLabel("Waiting for jobs from your other computer");
+    private final DarkButton remove = new DarkButton("Remove selected");
+    private final DarkButton clear = new DarkButton("Clear queue", DarkButton.ButtonStyle.DANGER);
+    private final DefaultTableModel model = new DefaultTableModel(new String[]{"Status", "Job", "Dimensions", "Size", "Received"}, 0) {
+        @Override public boolean isCellEditable(int row, int col) { return false; }
+    };
+    private final JTable table = new JTable(model);
 
-    private final JComboBox<JobEntry> recentCombo = new JComboBox<>();
-
-    public LocalJobsPanel(JobLibraryService libraryService,
-                          JobManagerGateway gateway,
-                          Consumer<JobEntry> onJobSelected,
-                          Consumer<JobEntry> onJobActivateRequested) {
-        this.libraryService = libraryService;
+    public LocalJobsPanel(File incoming, JobManagerGateway gateway, Consumer<JobEntry> onSelected, Consumer<JobEntry> onActivate) {
         this.gateway = gateway;
-        this.onJobSelected = onJobSelected;
-        this.onJobActivateRequested = onJobActivateRequested;
-
-        setLayout(new BorderLayout(6, 6));
+        this.onSelected = onSelected;
+        this.onActivate = onActivate;
+        try { queue = new IncomingJobQueue(incoming); }
+        catch (java.io.IOException ex) { throw new IllegalStateException("Could not open incoming queue", ex); }
+        setLayout(new BorderLayout(0, 18));
         setBackground(UITheme.BG_PANEL);
-        setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+        setBorder(BorderFactory.createEmptyBorder(22, 22, 18, 22));
+        setMinimumSize(new Dimension(420, 250));
+        JPanel heading = new JPanel(new BorderLayout(8, 14));
+        heading.setOpaque(false);
+        JLabel title = UITheme.createHeaderLabel("Incoming jobs");
+        title.setFont(UITheme.FONT_TITLE);
+        heading.add(title, BorderLayout.WEST);
+        heading.add(count, BorderLayout.EAST);
+        search.setFont(UITheme.FONT_BODY);
+        search.setBackground(UITheme.BG_INPUT);
+        search.setForeground(UITheme.TEXT_PRIMARY);
+        search.setCaretColor(UITheme.ACCENT_CYAN);
+        search.setToolTipText("Search jobs by name");
+        search.setBorder(BorderFactory.createCompoundBorder(new UITheme.RoundedBorder(UITheme.BORDER_COLOR, 12), BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+        JPanel searchRow = new JPanel(new BorderLayout(10, 0));
+        searchRow.setOpaque(false);
+        searchRow.add(UITheme.createMutedLabel("Search"), BorderLayout.WEST);
+        searchRow.add(search, BorderLayout.CENTER);
+        DarkButton refresh = new DarkButton("Refresh");
+        refresh.addActionListener(e -> refreshJobs());
+        searchRow.add(refresh, BorderLayout.EAST);
+        heading.add(searchRow, BorderLayout.SOUTH);
+        add(heading, BorderLayout.NORTH);
 
-        // Top Control Area (Folder Bar + Search Bar)
-        JPanel topContainer = new JPanel();
-        topContainer.setLayout(new BoxLayout(topContainer, BoxLayout.Y_AXIS));
-        topContainer.setOpaque(false);
-
-        // Folder bar
-        JPanel folderBar = new JPanel(new BorderLayout(6, 0));
-        folderBar.setOpaque(false);
-
-        JLabel lblDir = new JLabel("Directory: ");
-        lblDir.setFont(UITheme.FONT_SMALL_BOLD);
-        lblDir.setForeground(UITheme.TEXT_SECONDARY);
-        folderBar.add(lblDir, BorderLayout.WEST);
-
-        dirField.setFont(UITheme.FONT_SMALL);
-        dirField.setBackground(UITheme.BG_INPUT);
-        dirField.setForeground(UITheme.TEXT_PRIMARY);
-        dirField.setCaretColor(UITheme.ACCENT_CYAN);
-        dirField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UITheme.BORDER_COLOR, 1),
-                BorderFactory.createEmptyBorder(4, 6, 4, 6)
-        ));
-        dirField.setEditable(false);
-        folderBar.add(dirField, BorderLayout.CENTER);
-
-        JPanel folderActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        folderActions.setOpaque(false);
-
-        chkRecursive.setFont(UITheme.FONT_SMALL);
-        chkRecursive.setForeground(UITheme.TEXT_SECONDARY);
-        chkRecursive.setOpaque(false);
-        chkRecursive.setSelected(libraryService.isScanRecursive());
-        chkRecursive.addActionListener(e -> {
-            libraryService.setScanRecursive(chkRecursive.isSelected());
-            refreshJobs();
-        });
-        folderActions.add(chkRecursive);
-
-        DarkButton btnBrowse = new DarkButton("📁 Browse...", DarkButton.ButtonStyle.SECONDARY);
-        btnBrowse.setFont(UITheme.FONT_SMALL_BOLD);
-        btnBrowse.addActionListener(e -> browseFolder());
-        folderActions.add(btnBrowse);
-
-        DarkButton btnRefresh = new DarkButton("🔄 Refresh", DarkButton.ButtonStyle.SECONDARY);
-        btnRefresh.setFont(UITheme.FONT_SMALL_BOLD);
-        btnRefresh.addActionListener(e -> refreshJobs());
-        folderActions.add(btnRefresh);
-
-        folderBar.add(folderActions, BorderLayout.EAST);
-        topContainer.add(folderBar);
-        topContainer.add(Box.createVerticalStrut(6));
-
-        // Filter Bar
-        JPanel filterBar = new JPanel(new BorderLayout(6, 0));
-        filterBar.setOpaque(false);
-
-        JPanel filterLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        filterLeft.setOpaque(false);
-
-        JLabel lblSearch = new JLabel("Filter: ");
-        lblSearch.setFont(UITheme.FONT_SMALL_BOLD);
-        lblSearch.setForeground(UITheme.TEXT_SECONDARY);
-        filterLeft.add(lblSearch);
-
-        searchField.setFont(UITheme.FONT_BODY);
-        searchField.setBackground(UITheme.BG_INPUT);
-        searchField.setForeground(UITheme.TEXT_PRIMARY);
-        searchField.setCaretColor(UITheme.ACCENT_CYAN);
-        searchField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UITheme.BORDER_COLOR, 1),
-                BorderFactory.createEmptyBorder(3, 6, 3, 6)
-        ));
-        searchField.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent e) { applyFilter(); }
-            @Override public void removeUpdate(DocumentEvent e) { applyFilter(); }
-            @Override public void changedUpdate(DocumentEvent e) { applyFilter(); }
-        });
-        filterLeft.add(searchField);
-
-        filterBar.add(filterLeft, BorderLayout.WEST);
-
-        countLabel.setFont(UITheme.FONT_SMALL);
-        countLabel.setForeground(UITheme.TEXT_MUTED);
-        filterBar.add(countLabel, BorderLayout.EAST);
-
-        topContainer.add(filterBar);
-        add(topContainer, BorderLayout.NORTH);
-
-        // Center Table
-        String[] columns = {"Status", "Job Name", "Dimensions (X×Y×Z)", "Size", "Modified"};
-        tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-
-        jobsTable = new JTable(tableModel);
-        jobsTable.setBackground(UITheme.BG_PANEL);
-        jobsTable.setForeground(UITheme.TEXT_PRIMARY);
-        jobsTable.setSelectionBackground(new java.awt.Color(0x35, 0x48, 0x5E));
-        jobsTable.setSelectionForeground(java.awt.Color.WHITE);
-        jobsTable.setRowHeight(26);
-        jobsTable.setFont(UITheme.FONT_BODY);
-        jobsTable.setShowGrid(false);
-        jobsTable.setIntercellSpacing(new Dimension(0, 1));
-        jobsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        jobsTable.getTableHeader().setBackground(UITheme.BG_CARD);
-        jobsTable.getTableHeader().setForeground(UITheme.TEXT_SECONDARY);
-        jobsTable.getTableHeader().setFont(UITheme.FONT_SMALL_BOLD);
-        jobsTable.getTableHeader().setBorder(BorderFactory.createLineBorder(UITheme.BORDER_COLOR));
-
-        // Column widths
-        jobsTable.getColumnModel().getColumn(0).setPreferredWidth(75);
-        jobsTable.getColumnModel().getColumn(0).setMaxWidth(90);
-        jobsTable.getColumnModel().getColumn(1).setPreferredWidth(200);
-        jobsTable.getColumnModel().getColumn(2).setPreferredWidth(140);
-        jobsTable.getColumnModel().getColumn(3).setPreferredWidth(80);
-        jobsTable.getColumnModel().getColumn(4).setPreferredWidth(120);
-
-        JobTableRenderer renderer = new JobTableRenderer();
-        for (int i = 0; i < jobsTable.getColumnCount(); i++) {
-            jobsTable.getColumnModel().getColumn(i).setCellRenderer(renderer);
+        table.setFont(UITheme.FONT_BODY);
+        table.setRowHeight(48);
+        table.setBackground(UITheme.BG_PANEL);
+        table.setForeground(UITheme.TEXT_PRIMARY);
+        table.setShowGrid(false);
+        table.setIntercellSpacing(new Dimension(0, 0));
+        table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        table.getTableHeader().setReorderingAllowed(false);
+        table.getTableHeader().setBackground(UITheme.BG_PANEL);
+        table.getTableHeader().setForeground(UITheme.TEXT_MUTED);
+        table.getTableHeader().setFont(UITheme.FONT_SMALL_BOLD);
+        table.getTableHeader().setPreferredSize(new Dimension(0, 34));
+        table.getTableHeader().setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER_COLOR));
+        DefaultTableCellRenderer headerRenderer = new DefaultTableCellRenderer();
+        headerRenderer.setBackground(UITheme.BG_PANEL);
+        headerRenderer.setForeground(UITheme.TEXT_MUTED);
+        headerRenderer.setFont(UITheme.FONT_SMALL_BOLD);
+        headerRenderer.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER_COLOR),
+                BorderFactory.createEmptyBorder(8, 8, 8, 8)));
+        table.getTableHeader().setDefaultRenderer(headerRenderer);
+        int[] widths = {75, 240, 150, 65, 130};
+        for (int i = 0; i < widths.length; i++) {
+            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+            table.getColumnModel().getColumn(i).setCellRenderer(new JobTableRenderer());
         }
-
-        // Table Selection & Double Click
-        jobsTable.getSelectionModel().addListSelectionListener(e -> {
+        table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                int row = jobsTable.getSelectedRow();
-                if (row >= 0 && row < filteredJobs.size()) {
-                    JobEntry selected = filteredJobs.get(row);
-                    if (onJobSelected != null) {
-                        onJobSelected.accept(selected);
-                    }
-                }
+                int row = table.getSelectedRow();
+                onSelected.accept(row >= 0 && row < visibleJobs.size() ? visibleJobs.get(row) : null);
+                updateActions();
             }
         });
-
-        jobsTable.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
-                    int row = jobsTable.getSelectedRow();
-                    if (row >= 0 && row < filteredJobs.size()) {
-                        JobEntry selected = filteredJobs.get(row);
-                        if (onJobActivateRequested != null) {
-                            onJobActivateRequested.accept(selected);
-                        }
-                    }
-                }
+        table.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                int row = table.rowAtPoint(e.getPoint());
+                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e) && row >= 0 && table.getSelectedRowCount() == 1)
+                    onActivate.accept(visibleJobs.get(row));
             }
         });
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.getViewport().setBackground(UITheme.BG_PANEL);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        JPanel body = new JPanel(new BorderLayout(0, 16));
+        body.setOpaque(false);
+        body.add(scroll, BorderLayout.CENTER);
+        empty.setHorizontalAlignment(SwingConstants.CENTER);
+        body.add(empty, BorderLayout.SOUTH);
+        add(body, BorderLayout.CENTER);
 
-        JScrollPane scrollPane = new JScrollPane(jobsTable);
-        scrollPane.setBackground(UITheme.BG_PANEL);
-        scrollPane.getViewport().setBackground(UITheme.BG_PANEL);
-        scrollPane.setBorder(BorderFactory.createLineBorder(UITheme.BORDER_COLOR));
-        add(scrollPane, BorderLayout.CENTER);
-
-        // Bottom Actions Bar (Open Single File, Recent Files, Drag&Drop Hint)
-        JPanel bottomBar = new JPanel(new BorderLayout(6, 4));
-        bottomBar.setOpaque(false);
-
-        JPanel leftBottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        leftBottom.setOpaque(false);
-
-        DarkButton btnOpenFile = new DarkButton("📄 Open Single File...", DarkButton.ButtonStyle.SECONDARY);
-        btnOpenFile.setFont(UITheme.FONT_SMALL_BOLD);
-        btnOpenFile.addActionListener(e -> openSingleFile());
-        leftBottom.add(btnOpenFile);
-
-        JLabel lblRecent = new JLabel("Recent: ");
-        lblRecent.setFont(UITheme.FONT_SMALL_BOLD);
-        lblRecent.setForeground(UITheme.TEXT_MUTED);
-        leftBottom.add(lblRecent);
-
-        recentCombo.setFont(UITheme.FONT_SMALL);
-        recentCombo.setPreferredSize(new Dimension(180, 26));
-        recentCombo.setBackground(UITheme.BG_CARD);
-        recentCombo.setForeground(UITheme.TEXT_PRIMARY);
-        leftBottom.add(recentCombo);
-
-        DarkButton btnLoadRecent = new DarkButton("Load", DarkButton.ButtonStyle.SECONDARY);
-        btnLoadRecent.setFont(UITheme.FONT_SMALL_BOLD);
-        btnLoadRecent.addActionListener(e -> {
-            JobEntry selected = (JobEntry) recentCombo.getSelectedItem();
-            if (selected != null) {
-                selectOrAddJob(selected);
-            }
+        JPanel footer = new JPanel(new BorderLayout(0, 12));
+        footer.setOpaque(false);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        actions.setOpaque(false);
+        remove.addActionListener(e -> removeSelected());
+        clear.addActionListener(e -> clearQueue());
+        actions.add(remove);
+        actions.add(clear);
+        footer.add(actions, BorderLayout.NORTH);
+        footer.add(UITheme.createMutedLabel("Ctrl / Shift to select multiple jobs. Files remain on disk."), BorderLayout.SOUTH);
+        add(footer, BorderLayout.SOUTH);
+        search.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e) { rebuild(); }
+            public void removeUpdate(DocumentEvent e) { rebuild(); }
+            public void changedUpdate(DocumentEvent e) { rebuild(); }
         });
-        leftBottom.add(btnLoadRecent);
-
-        bottomBar.add(leftBottom, BorderLayout.WEST);
-
-        JLabel lblDropHint = new JLabel("💡 Drag & drop G-code files here");
-        lblDropHint.setFont(UITheme.FONT_SMALL);
-        lblDropHint.setForeground(UITheme.TEXT_MUTED);
-        bottomBar.add(lblDropHint, BorderLayout.EAST);
-
-        add(bottomBar, BorderLayout.SOUTH);
-
-        setupDragAndDrop();
-        updateWatchedDirField();
         refreshJobs();
-        refreshRecentCombo();
-    }
-
-    private void updateWatchedDirField() {
-        File dir = libraryService.getWatchedDirectory();
-        dirField.setText(dir != null ? dir.getAbsolutePath() : "");
-    }
-
-    private void browseFolder() {
-        JFileChooser chooser = new JFileChooser(libraryService.getWatchedDirectory());
-        chooser.setDialogTitle("Select CNC G-Code Jobs Directory");
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        chooser.setAcceptAllFileFilterUsed(false);
-
-        int result = chooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File selected = chooser.getSelectedFile();
-            libraryService.setWatchedDirectory(selected);
-            updateWatchedDirField();
-            refreshJobs();
-        }
-    }
-
-    private void openSingleFile() {
-        JFileChooser chooser = new JFileChooser(libraryService.getWatchedDirectory());
-        chooser.setDialogTitle("Open G-Code File");
-        chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-        chooser.setFileFilter(new FileNameExtensionFilter("CNC G-Code Files (*.gcode, *.nc, *.tap, *.cnc)",
-                "gcode", "nc", "ngc", "tap", "cnc", "txt", "g"));
-
-        int result = chooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            JobEntry entry = libraryService.createEntryAndAnalyze(file, JobOrigin.LOCAL_DISK);
-            selectOrAddJob(entry);
-            refreshRecentCombo();
-        }
     }
 
     public void selectOrAddJob(JobEntry entry) {
-        if (entry == null) return;
-        boolean found = false;
-        for (int i = 0; i < allJobs.size(); i++) {
-            if (allJobs.get(i).getFile().getAbsolutePath().equalsIgnoreCase(entry.getFile().getAbsolutePath())) {
-                entry = allJobs.get(i);
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            allJobs.add(0, entry);
-        }
-        applyFilter();
-        // Select in table
-        int rowInFiltered = filteredJobs.indexOf(entry);
-        if (rowInFiltered >= 0) {
-            jobsTable.setRowSelectionInterval(rowInFiltered, rowInFiltered);
-            jobsTable.scrollRectToVisible(jobsTable.getCellRect(rowInFiltered, 0, true));
-        }
-        if (onJobSelected != null) {
-            onJobSelected.accept(entry);
-        }
+        try { queue.received(entry); }
+        catch (java.io.IOException ex) { showError(ex); }
+        allJobs.removeIf(j -> j.getFile().equals(entry.getFile()));
+        allJobs.add(0, entry);
+        search.setText("");
+        rebuild();
+        table.setRowSelectionInterval(0, 0);
     }
 
     public void refreshJobs() {
         allJobs.clear();
-        allJobs.addAll(libraryService.scanJobs());
-        applyFilter();
+        allJobs.addAll(queue.jobs());
+        rebuild();
     }
 
-    public void refreshRecentCombo() {
-        recentCombo.removeAllItems();
-        List<JobEntry> recents = libraryService.getRecentJobs();
-        for (JobEntry r : recents) {
-            recentCombo.addItem(r);
-        }
+    public void refreshActiveFile(File file) { rebuild(); }
+
+    private void removeSelected() {
+        List<JobEntry> selected = new ArrayList<>();
+        for (int row : table.getSelectedRows()) selected.add(visibleJobs.get(row));
+        dismiss(selected);
     }
 
-    public void refreshActiveFile(File activeFile) {
-        for (JobEntry j : allJobs) {
-            boolean active = activeFile != null && j.getFile().getAbsolutePath().equalsIgnoreCase(activeFile.getAbsolutePath());
-            j.setActiveInUgs(active);
-        }
-        applyFilter();
+    private void clearQueue() { dismiss(new ArrayList<>(allJobs)); }
+
+    private void dismiss(List<JobEntry> jobs) {
+        try {
+            queue.remove(jobs);
+            allJobs.removeAll(jobs);
+            rebuild();
+        } catch (java.io.IOException ex) { showError(ex); }
     }
 
-    private void applyFilter() {
-        String filter = searchField.getText().trim().toLowerCase(Locale.ROOT);
-        filteredJobs.clear();
-        tableModel.setRowCount(0);
+    private void showError(Exception ex) {
+        JOptionPane.showMessageDialog(this, "Could not save queue: " + ex.getMessage(), "Queue error", JOptionPane.ERROR_MESSAGE);
+    }
 
-        File activeFile = gateway.getActiveGcodeFile();
-
+    private void rebuild() {
+        Set<File> selected = new HashSet<>();
+        for (int row : table.getSelectedRows()) if (row < visibleJobs.size()) selected.add(visibleJobs.get(row).getFile());
+        visibleJobs.clear();
+        table.getSelectionModel().setValueIsAdjusting(true);
+        model.setRowCount(0);
+        String filter = search.getText().trim().toLowerCase(Locale.ROOT);
+        File active = gateway.getActiveGcodeFile();
         for (JobEntry job : allJobs) {
-            if (filter.isEmpty() || job.getName().toLowerCase(Locale.ROOT).contains(filter)) {
-                filteredJobs.add(job);
-                boolean isActive = activeFile != null && job.getFile().getAbsolutePath().equalsIgnoreCase(activeFile.getAbsolutePath());
-                job.setActiveInUgs(isActive);
-
-                String status = isActive ? "ACTIVE" : "READY";
-                tableModel.addRow(new Object[]{
-                        status,
-                        job.getName(),
-                        job.getDimensionsSummary(),
-                        job.getFormattedSize(),
-                        job.getFormattedDate()
-                });
-            }
+            if (!job.getName().toLowerCase(Locale.ROOT).contains(filter)) continue;
+            visibleJobs.add(job);
+            boolean loaded = job.getFile().equals(active);
+            job.setActiveInUgs(loaded);
+            model.addRow(new Object[]{loaded ? "ACTIVE" : "READY", job.getName(), job.getDimensionsSummary(), job.getFormattedSize(), job.getFormattedDate()});
+            if (selected.contains(job.getFile())) table.addRowSelectionInterval(model.getRowCount()-1, model.getRowCount()-1);
         }
-
-        countLabel.setText(String.format("Showing %d of %d jobs", filteredJobs.size(), allJobs.size()));
+        table.getSelectionModel().setValueIsAdjusting(false);
+        count.setText(visibleJobs.size() + " / " + allJobs.size() + " jobs");
+        empty.setText(allJobs.isEmpty() ? "Waiting for jobs from your other computer" : visibleJobs.isEmpty() ? "No matching jobs" : " ");
+        if (table.getSelectedRow() < 0) onSelected.accept(null);
+        updateActions();
     }
 
-    private void setupDragAndDrop() {
-        new DropTarget(this, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
-            @Override
-            public void drop(DropTargetDropEvent dtde) {
-                try {
-                    dtde.acceptDrop(DnDConstants.ACTION_COPY);
-                    Object data = dtde.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
-                    if (data instanceof List<?>) {
-                        List<?> list = (List<?>) data;
-                        JobEntry firstValid = null;
-                        for (Object item : list) {
-                            if (item instanceof File) {
-                                File f = (File) item;
-                                if (f.isFile() && JobLibraryService.isSupportedGcodeFile(f)) {
-                                    JobEntry entry = libraryService.createEntryAndAnalyze(f, JobOrigin.LOCAL_DISK);
-                                    if (firstValid == null) {
-                                        firstValid = entry;
-                                    }
-                                }
-                            }
-                        }
-                        if (firstValid != null) {
-                            selectOrAddJob(firstValid);
-                            refreshRecentCombo();
-                        }
-                    }
-                    dtde.dropComplete(true);
-                } catch (Exception ex) {
-                    dtde.dropComplete(false);
-                }
-            }
-        });
+    private void updateActions() {
+        int n = table.getSelectedRowCount();
+        remove.setText(n > 0 ? "Remove selected (" + n + ")" : "Remove selected");
+        remove.setEnabled(n > 0);
+        clear.setEnabled(!allJobs.isEmpty());
     }
 }

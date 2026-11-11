@@ -36,7 +36,7 @@ public class DarkButton extends JButton {
     private final ButtonStyle style;
     private boolean isHovered = false;
     private boolean isPressed = false;
-    private int cornerRadius = 6;
+    private int cornerRadius = 12;
 
     public DarkButton(String text, ButtonStyle style) {
         super(text);
@@ -126,6 +126,6 @@ public class DarkButton extends JButton {
     @Override
     public Dimension getPreferredSize() {
         Dimension d = super.getPreferredSize();
-        return new Dimension(Math.max(d.width + 16, 70), Math.max(d.height + 6, 28));
+        return new Dimension(Math.max(d.width + 16, 70), Math.max(d.height + 12, 36));
     }
 }

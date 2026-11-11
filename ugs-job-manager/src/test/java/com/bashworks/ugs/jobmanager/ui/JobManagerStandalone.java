@@ -32,15 +32,20 @@ public class JobManagerStandalone {
             } catch (Exception ignored) {
             }
 
-            File sampleDir = createSampleGcodeFiles();
+
+
+            if (java.util.Arrays.asList(args).contains("--demo")) createSampleGcodeFiles();
 
             SimulatedJobManagerGateway gateway = new SimulatedJobManagerGateway();
             JobManagerPanel panel = new JobManagerPanel(gateway);
 
             JFrame frame = new JFrame(PluginInfo.TITLE + " — Standalone Preview Harness");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setMinimumSize(new Dimension(950, 620));
-            frame.setPreferredSize(new Dimension(1050, 680));
+            frame.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override public void windowClosing(java.awt.event.WindowEvent e) { panel.close(); }
+            });
+            frame.setMinimumSize(new Dimension(1000, 700));
+            frame.setPreferredSize(new Dimension(1400, 850));
             frame.setLayout(new BorderLayout());
 
             frame.add(panel, BorderLayout.CENTER);
@@ -50,7 +55,7 @@ public class JobManagerStandalone {
             simToolbar.setBackground(UITheme.BG_CARD);
             simToolbar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UITheme.BORDER_COLOR));
 
-            JLabel simLabel = new JLabel("⚡ Simulator Controls:");
+            JLabel simLabel = new JLabel("PREVIEW / SIMULATED MACHINE");
             simLabel.setFont(UITheme.FONT_SMALL_BOLD);
             simLabel.setForeground(UITheme.ACCENT_CYAN);
             simToolbar.add(simLabel);
@@ -69,7 +74,7 @@ public class JobManagerStandalone {
     }
 
     private static File createSampleGcodeFiles() {
-        File dir = new File(System.getProperty("user.home"), "Documents/CNC_Samples");
+        File dir = new File(System.getProperty("user.home"), ".ugs-job-manager/incoming");
         if (!dir.exists()) {
             dir.mkdirs();
         }
