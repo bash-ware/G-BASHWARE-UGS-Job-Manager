@@ -3,6 +3,8 @@ package com.bashworks.ugs.jobmanager.ui;
 import com.bashworks.ugs.jobmanager.PluginInfo;
 import com.bashworks.ugs.jobmanager.machine.JobManagerGateway;
 import com.bashworks.ugs.jobmanager.machine.JobManagerListener;
+import com.bashworks.ugs.jobmanager.machine.JobCompletionAlert;
+import com.bashworks.ugs.jobmanager.service.CyberPhoneRing;
 import com.bashworks.ugs.jobmanager.model.JobEntry;
 import com.bashworks.ugs.jobmanager.service.GcodeAnalyzer;
 
@@ -30,6 +32,8 @@ import java.io.File;
 public class JobManagerPanel extends JPanel implements JobManagerListener, LanReceiverService.LanListener {
 
     private final JobManagerGateway gateway;
+    private final CyberPhoneRing completionRing = new CyberPhoneRing();
+    private final JobCompletionAlert completionAlert;
     private final GcodeAnalyzer analyzer;
 
 
@@ -51,6 +55,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
 
     public JobManagerPanel(JobManagerGateway gateway) {
         this.gateway = gateway;
+        this.completionAlert = new JobCompletionAlert(gateway, completionRing::play);
         this.analyzer = new GcodeAnalyzer();
 
 
@@ -277,6 +282,8 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
     }
 
     public void close() {
+        completionAlert.close();
+        completionRing.close();
         gateway.removeListener(this);
         lanService.removeListener(this);
         lanService.stop();

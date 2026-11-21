@@ -270,7 +270,7 @@ public final class LanReceiverService {
                 } catch (Exception ignored) {}
 
                 String json = String.format(Locale.US,
-                        "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.4.0\",\"connected\":true," +
+                        "{\"app\":\"G-BASHWARE Job Manager\",\"version\":\"1.5.0\",\"connected\":true," +
                         "\"machineConnected\":%b,\"machineState\":\"%s\",\"isIdle\":%b,\"isSending\":%b," +
                         "\"activeJob\":\"%s\"}",
                         isConn, state != null ? state : "UNKNOWN", isIdle, isSending,

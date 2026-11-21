@@ -1,10 +1,11 @@
-# G-BASHWARE Job Manager 1.4.0 for UGS
+# G-BASHWARE Job Manager 1.5.0 for UGS
 
 [Download the latest release](https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager/releases/latest).
 
 Local incoming-job queue for G-code sent from GcodeMergerSplitter on another computer.
 
 - Numbered manual run order with Up/Down arrows, Alt+Up/Down shortcuts and drag reordering.
+- Loud six-second cyber phone ring on confirmed job completion; cancelled or disconnected runs stay silent.
 - Clear Next, Running, Paused, Stopped and Finished states; completed history stays below pending work.
 - Order and finished states persist. New jobs append; the running job is locked against reordering.
 - Load next prepares the next pending job. Starting remains manual; nothing auto-starts after completion.

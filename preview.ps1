@@ -21,6 +21,8 @@ if ($runtimeJars.Count -eq 0) { throw "Prepared UGS parser runtime is missing: $
 $runtimeClasspath = (@($verifyDir) + $runtimeJars) -join [IO.Path]::PathSeparator
 
 $sources = @(
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\CyberPhoneRing.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\JobCompletionAlert.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\PluginInfo.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobOrigin.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobBounds.java"),

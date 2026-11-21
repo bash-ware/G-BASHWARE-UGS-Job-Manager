@@ -11,6 +11,7 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class UgsJobManagerGatewayTest {
     @Test public void tracksSourceFileAndExplicitCompletion() throws Exception {
@@ -32,6 +33,8 @@ public class UgsJobManagerGatewayTest {
             }
         });
         UgsJobManagerGateway gateway = new UgsJobManagerGateway(backend);
+        AtomicInteger rings = new AtomicInteger();
+        JobCompletionAlert completionAlert = new JobCompletionAlert(gateway, rings::incrementAndGet);
         assertEquals("Queue identity must use original file", source, gateway.getActiveGcodeFile());
         List<String> events = new ArrayList<>();
         gateway.addListener(new JobManagerListener() {
@@ -49,11 +52,13 @@ public class UgsJobManagerGatewayTest {
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_RESUMED));
         SwingUtilities.invokeAndWait(() -> {});
         assertEquals(Arrays.asList("started"), events);
+        assertEquals("Start, pause and resume must stay silent", 0, rings.get());
         sending.set(false);
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_COMPLETE));
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_COMPLETE));
         SwingUtilities.invokeAndWait(() -> {});
         assertEquals(Arrays.asList("started", "finished"), events);
+        assertEquals("A completed run must ring once despite duplicate completion", 1, rings.get());
         sending.set(true);
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_STARTED));
         sending.set(false);
@@ -69,5 +74,17 @@ public class UgsJobManagerGatewayTest {
         SwingUtilities.invokeAndWait(() -> {});
         assertEquals("stopped", events.get(events.size()-1));
         assertEquals(6, events.size());
+        assertEquals("Cancellation and disconnect must stay silent", 1, rings.get());
+        connected.set(true);
+        sending.set(true);
+        gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_STARTED));
+        sending.set(false);
+        gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_COMPLETE));
+        SwingUtilities.invokeAndWait(() -> {});
+        assertEquals("Running the same file again must ring again", 2, rings.get());
+        completionAlert.close();
+        completionAlert.onJobStarted(source);
+        completionAlert.onJobFinished(source);
+        assertEquals("Closed panels must stay silent", 2, rings.get());
     }
 }
