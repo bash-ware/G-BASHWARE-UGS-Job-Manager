@@ -1,4 +1,4 @@
-# G-BASHWARE Job Manager 1.6.0 — Installation
+# G-BASHWARE Job Manager 1.6.1 — Installation
 
 ## Requirements
 
@@ -32,8 +32,6 @@ If you already use the project's NetBeans update center, check for updates in **
 
 ## Recover after an interruption
 
-Leave **Autosave** on to save the queue, loaded and unfinished jobs, height map, and the latest reported positions, controller state, and commands. Choose **Recover** when Job Manager opens to reload the queue and unfinished job.
+Leave **Autosave** on to keep the queue, job, and current AutoLeveler map. Choose **Restore** in the startup prompt to reload them. On compatible UGS builds, Job Manager opens AutoLeveler and loads the saved map with compensation off.
 
-Job Manager opens AutoLeveler on compatible UGS builds and restores the saved scan for review with compensation off. You can also attach a complete AutoLeveler `.xyz` export and record its units. On UGS 2.1.6, Job Manager preserves the map for export because that version has no AutoLeveler window.
-
-If the tool stayed in place, **Continue…** opens the saved checkpoint for review. Restarting machine motion requires a separately verified restart point.
+**View checkpoint** shows the last reported coordinates, controller state and commands for an unfinished job.

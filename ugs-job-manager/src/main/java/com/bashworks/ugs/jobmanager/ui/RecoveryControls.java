@@ -2,7 +2,6 @@ package com.bashworks.ugs.jobmanager.ui;
 
 import com.bashworks.ugs.jobmanager.machine.JobManagerGateway;
 import com.bashworks.ugs.jobmanager.machine.RecoveryTelemetry;
-import com.bashworks.ugs.jobmanager.machine.UgsHeightMapRecovery;
 import com.bashworks.ugs.jobmanager.service.RecoveryStore;
 import com.willwinder.universalgcodesender.model.UnitUtils.Units;
 import java.awt.*;
@@ -10,6 +9,9 @@ import java.io.*;
 import java.nio.file.*;
 import java.time.Instant;
 import java.util.*;
+import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
 import javax.swing.*;
@@ -21,23 +23,20 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
     private final RecoveryStore store;
     private final Preferences preferences;
     private final JCheckBox enabled = new JCheckBox("Autosave");
-    private final DarkButton map = new DarkButton("Height map");
-    private final DarkButton resume = new DarkButton("Continue…");
     private final DarkButton viewCheckpoint = new DarkButton("View checkpoint");
-    private final DarkButton recoverNow = new DarkButton("Recover autosave…");
     private final JLabel status = UITheme.createMutedLabel("");
     private final javax.swing.Timer timer;
-    private File attachedMap;
-    private Units attachedMapUnits;
     private File restoredFromCopy;
     private Properties saved = new Properties();
     private Properties recovered;
     private boolean ready, writing, closed;
-    private boolean preserveNativeMap;
     private Supplier<String> nativeMap = () -> null;
-    private java.util.function.Function<String, Boolean> restoreNativeMap = data -> false;
-    private java.util.function.BiFunction<File, Units, Boolean> restoreXyzMap = (file, units) -> false;
+    private Function<String, Boolean> restoreNativeMap = data -> false;
+    private BiFunction<File, Units, Boolean> restoreXyzMap = (file, units) -> false;
     private String retainedNativeMap = "";
+    // Existing 1.6.0 checkpoints may reference an attached XYZ export.
+    private final Properties legacyMap = new Properties();
+    private String mapSeenAfterFailedRestore;
 
     RecoveryControls(LocalJobsPanel jobs, JobManagerGateway gateway, File incoming) {
         super(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -56,24 +55,16 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
             if (enabled.isSelected()) tick();
             else status.setText("Autosave off");
         });
-        map.addActionListener(e -> chooseMap());
-        resume.setEnabled(false);
-        resume.addActionListener(e -> review());
         add(enabled);
-        add(map);
-        add(resume);
         viewCheckpoint.addActionListener(e -> review());
         viewCheckpoint.setVisible(false);
         add(viewCheckpoint);
-        recoverNow.addActionListener(e -> open());
-        recoverNow.setVisible(false);
-        add(recoverNow);
         add(status);
         timer = new javax.swing.Timer(500, e -> tick());
     }
 
-    void setNativeMap(Supplier<String> read, java.util.function.Function<String, Boolean> restore,
-                      java.util.function.BiFunction<File, Units, Boolean> restoreXyz) {
+    void setNativeMap(Supplier<String> read, Function<String, Boolean> restore,
+                      BiFunction<File, Units, Boolean> restoreXyz) {
         nativeMap = read;
         restoreNativeMap = restore;
         restoreXyzMap = restoreXyz;
@@ -83,90 +74,81 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
         if (closed || ready) return;
         try {
             saved = store.read();
-            if (!saved.isEmpty() && !offerRecovery()) {
-                status.setText("Recovery deferred");
-                recoverNow.setVisible(true);
-                return;
+        } catch (IOException | IllegalArgumentException ex) {
+            showStatus("Could not read autosave", ex.getMessage());
+            return;
+        }
+
+        if (!saved.isEmpty()) {
+            String file = saved.getProperty("unfinished.name", saved.getProperty("loaded.name", ""));
+            String message = "Restore the saved queue, job and AutoLeveler map?";
+            if (!file.isBlank()) message += "\n" + file;
+            Object[] options = {"Restore", "Skip"};
+            int answer = JOptionPane.showOptionDialog(this, message, "Restore autosave?",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+            if (answer == 0) {
+                if (gateway.isSendingFile() || (gateway.isConnected() && !gateway.isIdle())) {
+                    showStatus("Autosave retained", "Restore requires an idle controller. Reopen Job Manager when idle.");
+                    return;
+                }
+                recover(saved);
             }
-            recoverNow.setVisible(false);
-            ready = true;
-            timer.start();
-            tick();
-        } catch (IOException ex) {
-            status.setText("Recovery needs attention");
-            recoverNow.setVisible(!saved.isEmpty());
-            showError(ex);
         }
+
+        ready = true;
+        timer.start();
+        tick();
     }
 
-    private boolean offerRecovery() throws IOException {
-        String file = saved.getProperty("unfinished.name", saved.getProperty("loaded.name", "No loaded job"));
-        Object[] actions = {"Recover", "Discard checkpoint", "Later"};
-        int answer = JOptionPane.showOptionDialog(this, "Restore the saved queue, job and height map?\n" + file,
-                "Recover autosave", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, actions, actions[0]);
-        if (answer == 0 && gateway.isSendingFile()) {
-            throw new IOException("An active stream prevents restoring the saved job.");
+    private void recover(Properties checkpoint) {
+        List<String> issues = new ArrayList<>();
+        try {
+            jobs.restoreQueue(checkpoint.getProperty("queue", ""));
+        } catch (IOException ex) {
+            issues.add("Queue: " + ex.getMessage());
         }
-        if (answer == 0) {
-            recover();
-        } else if (answer == 1) {
-            store.discard();
-            saved = new Properties();
-        } else {
-            return false;
+        try {
+            File file = restoreFile(checkpoint, checkpoint.containsKey("unfinished.name") ? "unfinished" : "loaded");
+            if (file != null) {
+                gateway.loadJobIntoUgs(file);
+                jobs.selectFile(file);
+            }
+        } catch (Exception ex) {
+            issues.add("Job: " + ex.getMessage());
         }
-        return true;
-    }
 
-    private void recover() throws IOException {
-        Properties checkpoint = saved;
-        File loaded = null;
-        String loadIssue = "";
-        try {
-            loaded = restoreFile(checkpoint, checkpoint.containsKey("unfinished.name") ? "unfinished" : "loaded");
-        } catch (IOException ex) {
-            loadIssue = ex.getMessage();
-        }
-        boolean hasUnfinished = checkpoint.containsKey("unfinished.name");
-        Object[] movementChoices = {"Tool stayed in place", "Tool moved", "Unsure"};
-        int movement = JOptionPane.CLOSED_OPTION;
-        if (hasUnfinished) {
-            movement = JOptionPane.showOptionDialog(this, "Did the tool or machine axes move after the job stopped?",
-                    "Verify tool position", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
-                    null, movementChoices, movementChoices[2]);
-        }
-        if (gateway.isSendingFile()) throw new IOException("An active stream prevents restoring the saved job.");
-        jobs.restoreQueue(checkpoint.getProperty("queue", ""));
-        try {
-            attachedMap = store.backedUp(checkpoint.getProperty("map.backup"));
-            attachedMapUnits = readUnits(checkpoint.getProperty("map.units"));
-        } catch (IOException ex) {
-            loadIssue = loadIssue.isBlank() ? ex.getMessage() : loadIssue + "\n" + ex.getMessage();
-        }
         retainedNativeMap = checkpoint.getProperty("map.native", "");
-        recovered = checkpoint;
-        if (loaded != null) {
+        checkpoint.stringPropertyNames().stream()
+                .filter(key -> key.startsWith("map.") && !key.equals("map.native"))
+                .forEach(key -> legacyMap.setProperty(key, checkpoint.getProperty(key)));
+        boolean expectsMap = !retainedNativeMap.isEmpty() || !legacyMap.isEmpty();
+        boolean mapRestored = false;
+        if (expectsMap) {
             try {
-                gateway.loadJobIntoUgs(loaded);
-                jobs.selectFile(loaded);
-            } catch (Exception ex) {
-                loadIssue = ex.getMessage();
-                loaded = null;
+                if (!retainedNativeMap.isEmpty()) {
+                    mapRestored = restoreNativeMap.apply(retainedNativeMap);
+                } else {
+                    File xyz = store.backedUp(legacyMap.getProperty("map.backup"));
+                    String savedUnits = legacyMap.getProperty("map.units", "");
+                    if (xyz != null && ("MM".equals(savedUnits) || "INCH".equals(savedUnits))) {
+                        mapRestored = restoreXyzMap.apply(xyz, Units.valueOf(savedUnits));
+                    }
+                }
+            } catch (IOException | RuntimeException ex) {
+                issues.add("AutoLeveler: " + ex.getMessage());
+            }
+            if (!mapRestored) {
+                mapSeenAfterFailedRestore = Objects.toString(nativeMap.get(), "");
+                issues.add("The height map remains saved in the checkpoint.");
             }
         }
-        boolean mapRestored = loadSavedMap();
-        preserveNativeMap = !mapRestored && !retainedNativeMap.isEmpty();
-        if (!retainedNativeMap.isEmpty() || attachedMap != null) {
-            map.setText(mapRestored ? "Height map restored" : "Saved height map");
-        }
-        resume.setEnabled(hasUnfinished && movement == 0 && loaded != null);
-        viewCheckpoint.setVisible(!resume.isEnabled());
-        resume.setToolTipText(hasUnfinished && movement != 0
-                ? "Tool position must be re-established before any continuation" : "Review the saved continuation point");
-        status.setText(hasUnfinished && movement != 0 ? "Recovered · tool position unverified" : "Autosave recovered");
-        if (!loadIssue.isBlank()) {
-            status.setText("Recovered with missing data");
-            JOptionPane.showMessageDialog(this, loadIssue, "Recovery details", JOptionPane.WARNING_MESSAGE);
+
+        recovered = checkpoint;
+        viewCheckpoint.setVisible(checkpoint.containsKey("unfinished.name"));
+        if (!issues.isEmpty()) {
+            showStatus("Autosave partially restored", String.join(" ", issues));
+        } else {
+            showStatus(mapRestored ? "AutoLeveler map restored" : "Autosave restored", null);
         }
         jobs.refreshActiveFile(gateway.getActiveGcodeFile());
     }
@@ -180,89 +162,6 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
         if (copy == null) throw new IOException("Saved job is missing: " + file.getName());
         restoredFromCopy = copy;
         return copy;
-    }
-
-    private boolean isXyz(File file) {
-        return file != null && file.getName().toLowerCase(Locale.ROOT).endsWith(".xyz");
-    }
-
-    private static Units readUnits(String value) {
-        if ("MM".equals(value)) return Units.MM;
-        if ("INCH".equals(value)) return Units.INCH;
-        return null;
-    }
-
-    private Units chooseMapUnits() {
-        Object[] units = {"Millimetres", "Inches"};
-        int choice = JOptionPane.showOptionDialog(this, "Choose the units used when this XYZ map was exported.",
-                "Height map units", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
-                null, units, null);
-        if (choice < 0) return null;
-        return choice == 0 ? Units.MM : Units.INCH;
-    }
-
-    private boolean loadSavedMap() {
-        if (!retainedNativeMap.isEmpty()) return restoreNativeMap.apply(retainedNativeMap);
-        return isXyz(attachedMap) && attachedMapUnits != null
-                && restoreXyzMap.apply(attachedMap, attachedMapUnits);
-    }
-
-    private void chooseMap() {
-        if (attachedMap != null || !retainedNativeMap.isEmpty()) {
-            Object[] options = {"Load in AutoLeveler", "Export saved map", "Choose map file", "Detach map", "Close"};
-            int choice = JOptionPane.showOptionDialog(this, "A height map is attached to recovery.", "Height map",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-            if (choice == 0) {
-                if (isXyz(attachedMap) && attachedMapUnits == null) attachedMapUnits = chooseMapUnits();
-                if (loadSavedMap()) {
-                    preserveNativeMap = false;
-                    map.setText("Height map restored");
-                    tick();
-                } else {
-                    JOptionPane.showMessageDialog(this,
-                            "AutoLeveler needs an idle controller, an available scanner, matching units, and an empty scan grid.",
-                            "Height map saved for import", JOptionPane.INFORMATION_MESSAGE);
-                }
-                return;
-            }
-            if (choice == 1) { exportMap(); return; }
-            if (choice == 3) {
-                attachedMap = null;
-                attachedMapUnits = null;
-                retainedNativeMap = "";
-                preserveNativeMap = false;
-                map.setText("Height map");
-                tick();
-                return;
-            }
-            if (choice != 2) return;
-        }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Attach an exported height map");
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            Units units = isXyz(file) ? chooseMapUnits() : null;
-            if (isXyz(file) && units == null) return;
-            attachedMap = file;
-            attachedMapUnits = units;
-            retainedNativeMap = "";
-            map.setText("Height map attached");
-            map.setToolTipText(attachedMap.getName());
-            tick();
-        }
-    }
-
-    private void exportMap() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle(attachedMap != null ? "Export recovered height map"
-                : "Export recovered height map (" + UgsHeightMapRecovery.units(retainedNativeMap) + ")");
-        chooser.setSelectedFile(new File(attachedMap != null ? attachedMap.getName() : "recovered-height-map.xyz"));
-        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
-        Path target = chooser.getSelectedFile().toPath();
-        try {
-            if (attachedMap != null) Files.copy(attachedMap.toPath(), target);
-            else Files.writeString(target, UgsHeightMapRecovery.exportXyz(retainedNativeMap), StandardOpenOption.CREATE_NEW);
-        } catch (IOException ex) { showError(ex); }
     }
 
     private void review() {
@@ -286,15 +185,12 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
         details.setLineWrap(true);
         details.setWrapStyleWord(true);
         details.setCaretPosition(0);
-        JOptionPane.showMessageDialog(this, new Object[]{
-                "Review the checkpoint before deciding where to restart. Machine continuation is not enabled.",
-                new JScrollPane(details)}, "Continue from stop position", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this, new JScrollPane(details), "Saved job checkpoint", JOptionPane.INFORMATION_MESSAGE);
     }
 
     void newRun() {
         recovered = null;
         restoredFromCopy = null;
-        resume.setEnabled(false);
         viewCheckpoint.setVisible(false);
         tick();
     }
@@ -307,17 +203,14 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
         Properties data = new Properties();
         data.setProperty("queue", jobs.queueCheckpoint());
         data.putAll(snapshot.state());
-        String liveMap = mapFileFromScanner();
-        if (liveMap != null && (!liveMap.isEmpty() || !preserveNativeMap)) {
+        String liveMap = nativeMap.get();
+        if (liveMap != null && !liveMap.equals(mapSeenAfterFailedRestore)) {
             retainedNativeMap = liveMap;
-            preserveNativeMap = false;
-            if (!liveMap.isEmpty() && attachedMap == null && !map.getText().equals("Height map restored"))
-                map.setText("Saved height map");
-            if (liveMap.isEmpty() && attachedMap == null) map.setText("Height map");
+            legacyMap.clear();
+            mapSeenAfterFailedRestore = null;
         }
+        data.putAll(legacyMap);
         if (!retainedNativeMap.isEmpty()) data.setProperty("map.native", retainedNativeMap);
-        File mapFile = attachedMap;
-        if (mapFile != null && attachedMapUnits != null) data.setProperty("map.units", attachedMapUnits.name());
         Properties preceding = saved;
         Properties recoveredSnapshot = recovered;
         boolean keepUnfinished = snapshot.unfinished() == null && recoveredSnapshot != null
@@ -334,7 +227,6 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
                     saveFile(data, preceding, "unfinished", snapshot.unfinished());
                     saveFile(data, preceding, "processed", snapshot.processed());
                 }
-                saveFile(data, preceding, "map", mapFile);
                 if (!data.containsKey("loaded.name") && !data.containsKey("unfinished.name")
                         && !data.containsKey("map.name") && !data.containsKey("map.native")
                         && data.getProperty("queue", "").isEmpty() && preceding.isEmpty()) return preceding;
@@ -352,7 +244,8 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
                 if (closed) return;
                 try {
                     saved = get();
-                    status.setToolTipText(saved.isEmpty() ? null : "Saved " + saved.getProperty("saved.at"));
+                    if (status.getText().isBlank() && !saved.isEmpty())
+                        status.setToolTipText("Saved " + saved.getProperty("saved.at"));
                 } catch (Exception ex) {
                     status.setText("Autosave failed");
                     status.setToolTipText(ex.getCause() == null ? ex.getMessage() : ex.getCause().getMessage());
@@ -360,8 +253,6 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
             }
         }.execute();
     }
-
-    private String mapFileFromScanner() { return attachedMap == null ? nativeMap.get() : null; }
 
     private void saveFile(Properties data, Properties preceding, String prefix, File file) throws IOException {
         if (file == null) return;
@@ -373,8 +264,9 @@ final class RecoveryControls extends JPanel implements AutoCloseable {
         if (!backup.isBlank()) data.setProperty(prefix + ".backup", backup);
     }
 
-    private void showError(Exception ex) {
-        JOptionPane.showMessageDialog(this, ex.getMessage(), "Job recovery", JOptionPane.WARNING_MESSAGE);
+    private void showStatus(String message, String details) {
+        status.setText(message);
+        status.setToolTipText(details);
     }
 
     @Override public void close() { closed = true; timer.stop(); }
