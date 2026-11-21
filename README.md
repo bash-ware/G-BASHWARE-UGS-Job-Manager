@@ -5,7 +5,7 @@
 Local incoming-job queue for G-code sent from GcodeMergerSplitter on another computer.
 
 - Numbered manual run order with Up/Down arrows, Alt+Up/Down shortcuts and drag reordering.
-- Loud six-second cyber phone ring on confirmed job completion; cancelled or disconnected runs stay silent.
+- User-supplied warning alarm on confirmed job completion; any keypress or mouse activity dismisses it. Windows dismissal works even outside UGS. Cancelled or disconnected runs stay silent.
 - Clear Next, Running, Paused, Stopped and Finished states; completed history stays below pending work.
 - Order and finished states persist. New jobs append; the running job is locked against reordering.
 - Load next prepares the next pending job. Starting remains manual; nothing auto-starts after completion.

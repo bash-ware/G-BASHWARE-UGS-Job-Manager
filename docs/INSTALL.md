@@ -28,6 +28,6 @@ If you already use the project's NetBeans update center, check for updates in **
 - Select a job to inspect dimensions, tools, feed, spindle and its visual toolpath. Click the thumbnail to open a 900 × 800 preview.
 - In the enlarged view, switch between **Isometric** and **Top / XY**, scroll to zoom, drag to pan, or choose **Fit view**. **Rapid travel** shows positioning moves; the default focuses on cutting geometry.
 - **Start job** asks for confirmation before streaming.
-- A loud six-second cyber phone ring plays once when UGS confirms a completed run. Pausing, stopping, cancelling or disconnecting does not trigger the ring. Playback uses the default audio output and your existing system volume.
+- The supplied warning alarm plays once when UGS confirms a completed run. Any keypress or mouse activity stops it; on Windows this also works while another app has focus. Pausing, stopping, cancelling or disconnecting does not trigger it. Playback uses your default audio output and existing system volume.
 
-Version 1.5.0 adds the cyber phone completion ring; the visual toolpath and queue controls remain available.
+Version 1.5.0 adds the supplied completion alarm with input dismissal; the visual toolpath and queue controls remain available.

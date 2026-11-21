@@ -18,10 +18,14 @@ if (-not (Test-Path -LiteralPath $Javac)) {
 $ugsRuntime = Join-Path $projectRoot '.upstream\ugs-platform-app-2.1.6\ugsplatform\ugsplatform\modules\ext\com.willwinder.ugs-platform-ugslib'
 $runtimeJars = @(Get-ChildItem -LiteralPath $ugsRuntime -Filter '*.jar' -Recurse | ForEach-Object { $_.FullName })
 if ($runtimeJars.Count -eq 0) { throw "Prepared UGS parser runtime is missing: $ugsRuntime" }
-$runtimeClasspath = (@($verifyDir) + $runtimeJars) -join [IO.Path]::PathSeparator
+$jnaJar = Join-Path $projectRoot '.m2\repository\net\java\dev\jna\jna\5.14.0\jna-5.14.0.jar'
+if (-not (Test-Path -LiteralPath $jnaJar)) { throw 'Run build.ps1 first to prepare the JNA input-monitor dependency.' }
+$resources = Join-Path $projectRoot 'ugs-job-manager\src\main\resources'
+$runtimeClasspath = (@($verifyDir, $resources, $jnaJar) + $runtimeJars) -join [IO.Path]::PathSeparator
 
 $sources = @(
-    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\CyberPhoneRing.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\SystemInputActivity.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\CompletionAlarm.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\JobCompletionAlert.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\PluginInfo.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\model\JobOrigin.java"),
