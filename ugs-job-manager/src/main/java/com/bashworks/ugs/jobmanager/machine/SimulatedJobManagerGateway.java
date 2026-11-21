@@ -12,6 +12,9 @@ public final class SimulatedJobManagerGateway implements JobManagerGateway {
 
     private final List<JobManagerListener> listeners = new CopyOnWriteArrayList<>();
     private File activeGcodeFile;
+    private final RecoveryTelemetry recovery = new RecoveryTelemetry();
+
+    @Override public RecoveryTelemetry recoveryTelemetry() { return recovery; }
     private boolean connected = true;
     private boolean idle = true;
     private boolean sending = false;
@@ -57,6 +60,7 @@ public final class SimulatedJobManagerGateway implements JobManagerGateway {
             throw new IllegalStateException("Simulated machine is currently running a job!");
         }
         this.activeGcodeFile = file;
+        recovery.loaded(file, null);
         this.stateName = "IDLE";
         this.idle = true;
         this.sending = false;
@@ -72,6 +76,7 @@ public final class SimulatedJobManagerGateway implements JobManagerGateway {
     @Override
     public void unsetActiveJob() throws Exception {
         this.activeGcodeFile = null;
+        recovery.loaded(null, null);
         dispatchActiveJobChanged(null);
     }
 
@@ -88,6 +93,7 @@ public final class SimulatedJobManagerGateway implements JobManagerGateway {
         this.stateName = "RUN";
 
         File startedFile = activeGcodeFile;
+        recovery.started(startedFile, null);
         SwingUtilities.invokeLater(() -> {
             for (JobManagerListener l : listeners) {
                 l.onJobStarted(startedFile);
@@ -102,6 +108,7 @@ public final class SimulatedJobManagerGateway implements JobManagerGateway {
     private void endSimulatedJob(boolean completed) {
         if (!sending) return;
         File ended = activeGcodeFile;
+        if (completed) recovery.finished(ended); else recovery.interrupted();
         sending = false;
         paused = false;
         idle = connected;

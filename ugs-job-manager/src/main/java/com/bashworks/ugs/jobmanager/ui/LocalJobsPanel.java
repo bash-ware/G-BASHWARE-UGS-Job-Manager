@@ -146,6 +146,23 @@ public class LocalJobsPanel extends JPanel {
         } catch (java.io.IOException ex) { showError(ex); }
     }
 
+    String queueCheckpoint() { return queue.checkpoint(); }
+
+    void restoreQueue(String checkpoint) throws java.io.IOException {
+        queue.restore(checkpoint);
+        refreshJobs();
+    }
+
+    void selectFile(File file) {
+        for (int row = 0; row < visibleJobs.size(); row++) {
+            if (visibleJobs.get(row).getFile().equals(file)) {
+                table.setRowSelectionInterval(row, row);
+                table.scrollRectToVisible(table.getCellRect(row, 0, true));
+                break;
+            }
+        }
+    }
+
     public void refreshJobs() {
         try {
             List<JobEntry> jobs = queue.jobs();

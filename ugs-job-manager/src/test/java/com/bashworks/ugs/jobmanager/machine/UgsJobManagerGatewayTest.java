@@ -29,6 +29,10 @@ public class UgsJobManagerGatewayTest {
                 case "isIdle": return !sending.get();
                 case "getControllerState": return ControllerState.IDLE;
                 case "isPaused": return false;
+                case "getNumSentRows": return 12L;
+                case "getNumCompletedRows": return 10L;
+                case "getMachinePosition": return new com.willwinder.universalgcodesender.model.Position(
+                        12, 23, 34, com.willwinder.universalgcodesender.model.UnitUtils.Units.MM);
                 default: return null;
             }
         });
@@ -53,6 +57,19 @@ public class UgsJobManagerGatewayTest {
         SwingUtilities.invokeAndWait(() -> {});
         assertEquals(Arrays.asList("started"), events);
         assertEquals("Start, pause and resume must stay silent", 0, rings.get());
+        var command = new com.willwinder.universalgcodesender.types.GcodeCommand("G1 X12", 42);
+        var next = new com.willwinder.universalgcodesender.types.GcodeCommand("G1 Y23", 43);
+        gateway.UGSEvent(new CommandEvent(CommandEventType.COMMAND_SENT, command));
+        command.setOk(true);
+        gateway.UGSEvent(new CommandEvent(CommandEventType.COMMAND_COMPLETE, command));
+        gateway.UGSEvent(new CommandEvent(CommandEventType.COMMAND_SENT, next));
+        var running = gateway.recoveryTelemetry().snapshot();
+        assertEquals(source, running.unfinished());
+        assertEquals(processed, running.processed());
+        assertEquals("G1 Y23", running.state().get("sent.command"));
+        assertEquals("G1 X12", running.state().get("ack.command"));
+        assertEquals("12", running.state().get("rows.sent"));
+        assertTrue(running.state().get("machine").contains("Z 34.000000"));
         sending.set(false);
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_COMPLETE));
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_COMPLETE));
@@ -75,6 +92,8 @@ public class UgsJobManagerGatewayTest {
         assertEquals("stopped", events.get(events.size()-1));
         assertEquals(6, events.size());
         assertEquals("Cancellation and disconnect must stay silent", 1, rings.get());
+        assertEquals(source, gateway.recoveryTelemetry().snapshot().unfinished());
+        assertEquals("INTERRUPTED", gateway.recoveryTelemetry().snapshot().state().get("status"));
         connected.set(true);
         sending.set(true);
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_STARTED));
@@ -82,6 +101,7 @@ public class UgsJobManagerGatewayTest {
         gateway.UGSEvent(new StreamEvent(StreamEventType.STREAM_COMPLETE));
         SwingUtilities.invokeAndWait(() -> {});
         assertEquals("Running the same file again must ring again", 2, rings.get());
+        assertNull(gateway.recoveryTelemetry().snapshot().unfinished());
         completionAlert.close();
         completionAlert.onJobStarted(source);
         completionAlert.onJobFinished(source);

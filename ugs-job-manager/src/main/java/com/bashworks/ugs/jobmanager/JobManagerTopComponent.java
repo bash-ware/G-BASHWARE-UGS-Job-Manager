@@ -1,6 +1,9 @@
 package com.bashworks.ugs.jobmanager;
 
 import com.bashworks.ugs.jobmanager.machine.UgsJobManagerGateway;
+import com.bashworks.ugs.jobmanager.machine.UgsHeightMapRecovery;
+import javax.swing.SwingUtilities;
+import org.openide.windows.WindowManager;
 import com.bashworks.ugs.jobmanager.ui.JobManagerPanel;
 import com.willwinder.ugs.nbp.lib.Mode;
 import com.willwinder.ugs.nbp.lib.lookup.CentralLookup;
@@ -33,33 +36,39 @@ import java.awt.BorderLayout;
 public final class JobManagerTopComponent extends TopComponent {
 
     private final BackendAPI backend;
-    private final UgsJobManagerGateway gateway;
-    private final JobManagerPanel panel;
+    private UgsJobManagerGateway gateway;
+    private JobManagerPanel panel;
 
     public JobManagerTopComponent() {
         this.backend = CentralLookup.getDefault().lookup(BackendAPI.class);
-        this.gateway = new UgsJobManagerGateway(backend);
-        this.panel = new JobManagerPanel(gateway);
-
         setLayout(new BorderLayout());
-        add(panel, BorderLayout.CENTER);
-
         refreshTitle();
-        setToolTipText("Load, catalog, and activate CNC G-code jobs from disk and web");
-        panel.getLanService().start();
+        setToolTipText("Manage incoming CNC jobs and recovery checkpoints");
     }
 
     @Override
     protected void componentOpened() {
         refreshTitle();
+        gateway = new UgsJobManagerGateway(backend);
+        panel = new JobManagerPanel(gateway);
+        var heightMap = new UgsHeightMapRecovery(backend,
+                () -> WindowManager.getDefault().findTopComponent("AutoLevelerTopComponent"));
+        panel.setHeightMapRecovery(heightMap::capture,
+                encoded -> openAutoLeveler() && heightMap.restore(encoded),
+                (file, units) -> openAutoLeveler() && heightMap.restoreXyz(file, units));
+        add(panel, BorderLayout.CENTER);
         backend.addUGSEventListener(gateway);
-        panel.getLanService().start();
+        JobManagerPanel opened = panel;
+        SwingUtilities.invokeLater(() -> {
+            if (panel == opened) opened.openRecovery();
+        });
     }
 
-    @Override
-    protected void componentShowing() {
-        refreshTitle();
-        panel.getLanService().start();
+    private boolean openAutoLeveler() {
+        var autoLeveler = WindowManager.getDefault().findTopComponent("AutoLevelerTopComponent");
+        if (autoLeveler == null) return false;
+        if (!autoLeveler.isOpened()) autoLeveler.open();
+        return true;
     }
 
     private void refreshTitle() {
@@ -72,5 +81,7 @@ public final class JobManagerTopComponent extends TopComponent {
     protected void componentClosed() {
         backend.removeUGSEventListener(gateway);
         panel.close();
+        remove(panel);
+        panel = null;
     }
 }

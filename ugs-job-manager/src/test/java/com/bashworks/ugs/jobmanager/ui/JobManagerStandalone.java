@@ -53,6 +53,7 @@ public class JobManagerStandalone {
             frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setVisible(true);
+            SwingUtilities.invokeLater(panel::openRecovery);
         });
     }
 

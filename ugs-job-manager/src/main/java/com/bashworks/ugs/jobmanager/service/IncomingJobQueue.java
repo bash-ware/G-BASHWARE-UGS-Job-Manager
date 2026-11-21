@@ -34,6 +34,28 @@ public final class IncomingJobQueue {
         }
     }
 
+    public String checkpoint() {
+        StringBuilder data = new StringBuilder();
+        records.forEach((id, state) -> data.append(state.name()).append('\t').append(id).append('\n'));
+        return data.toString();
+    }
+
+    public void restore(String data) throws IOException {
+        LinkedHashMap<String, State> restored = new LinkedHashMap<>();
+        try {
+            for (String line : data.split("\\R")) {
+                if (line.isEmpty()) continue;
+                String[] parts = line.split("\t", 2);
+                if (parts.length != 2 || parts[1].isBlank()) throw new IllegalArgumentException();
+                State state = State.valueOf(parts[0]);
+                restored.put(parts[1], state == State.RUNNING ? State.INTERRUPTED : state);
+            }
+        } catch (IllegalArgumentException ex) {
+            throw new IOException("Invalid saved queue", ex);
+        }
+        save(restored);
+    }
+
     public List<JobEntry> jobs() throws IOException {
         Map<String, JobEntry> files = new LinkedHashMap<>();
         File[] scanned = directory.listFiles();

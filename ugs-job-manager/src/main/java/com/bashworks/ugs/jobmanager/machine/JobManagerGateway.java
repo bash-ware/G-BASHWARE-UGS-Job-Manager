@@ -7,6 +7,8 @@ import java.io.File;
  */
 public interface JobManagerGateway {
 
+    default RecoveryTelemetry recoveryTelemetry() { return null; }
+
     boolean isConnected();
 
     boolean isIdle();

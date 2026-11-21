@@ -24,6 +24,10 @@ $resources = Join-Path $projectRoot 'ugs-job-manager\src\main\resources'
 $runtimeClasspath = (@($verifyDir, $resources, $jnaJar) + $runtimeJars) -join [IO.Path]::PathSeparator
 
 $sources = @(
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\UgsHeightMapRecovery.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\ui\RecoveryControls.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\RecoveryTelemetry.java"),
+    (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\RecoveryStore.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\SystemInputActivity.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\service\CompletionAlarm.java"),
     (Join-Path $projectRoot "ugs-job-manager\src\main\java\com\bashworks\ugs\jobmanager\machine\JobCompletionAlert.java"),

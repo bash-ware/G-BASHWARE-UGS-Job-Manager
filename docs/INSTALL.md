@@ -1,4 +1,4 @@
-# G-BASHWARE Job Manager 1.5.0 — Installation
+# G-BASHWARE Job Manager 1.6.0 — Installation
 
 ## Requirements
 
@@ -30,4 +30,10 @@ If you already use the project's NetBeans update center, check for updates in **
 - **Start job** asks for confirmation before streaming.
 - The supplied warning alarm plays once when UGS confirms a completed run. Any keypress or mouse activity stops it; on Windows this also works while another app has focus. Pausing, stopping, cancelling or disconnecting does not trigger it. Playback uses your default audio output and existing system volume.
 
-Version 1.5.0 adds the supplied completion alarm with input dismissal; the visual toolpath and queue controls remain available.
+## Recover after an interruption
+
+Leave **Autosave** on to save the queue, loaded and unfinished jobs, height map, and the latest reported positions, controller state, and commands. Choose **Recover** when Job Manager opens to reload the queue and unfinished job.
+
+Job Manager opens AutoLeveler on compatible UGS builds and restores the saved scan for review with compensation off. You can also attach a complete AutoLeveler `.xyz` export and record its units. On UGS 2.1.6, Job Manager preserves the map for export because that version has no AutoLeveler window.
+
+If the tool stayed in place, **Continue…** opens the saved checkpoint for review. Restarting machine motion requires a separately verified restart point.

@@ -1,4 +1,4 @@
-# G-BASHWARE Job Manager 1.5.0 for UGS
+# G-BASHWARE Job Manager 1.6.0 for UGS
 
 [Download the latest release](https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager/releases/latest).
 
@@ -17,6 +17,14 @@ Local incoming-job queue for G-code sent from GcodeMergerSplitter on another com
 - Incoming jobs are stored in `~/.ugs-job-manager/incoming/`; resending a job adds a new uniquely named queue file, preserving earlier jobs.
 - LAN discovery on UDP 9875 and receiving on HTTP 9876. The LAN upload endpoint remains; URL downloads have been removed.
 - Load into UGS, start, reload and unload actions retain the UGS gateway controls.
+
+## Crash recovery
+
+Leave **Autosave** checked to periodically save the queue, the loaded and interrupted job, the processed UGS stream, and the last available machine/work positions and controller state. The checkpoint records last sent and acknowledged commands separately. Use **Recover** on startup to reload the job and queue. Choose **Later** to keep the existing checkpoint until you decide.
+
+Open UGS AutoLeveler while scanning on compatible UGS builds so the current grid can be captured. Job Manager restores compatible scan grids for review with compensation off. If the scanner cannot accept the grid, use **Saved height map** to export the captured points as XYZ for import in the original units. You can also attach a complete AutoLeveler XYZ export under **Height map** and record its units. On recovery Job Manager opens compatible AutoLeveler builds and imports that file directly when the units match. UGS 2.1.6 lacks the AutoLeveler window, so Job Manager preserves the file for export there.
+
+If the tool stayed in place, **Continue…** opens the saved stop position and command history. If the tool moved or its position is uncertain, **View checkpoint** keeps these details visible. The checkpoint sends no motion or spindle commands. Acknowledged lines may still have been buffered by the controller.
 
 ## Local preview
 

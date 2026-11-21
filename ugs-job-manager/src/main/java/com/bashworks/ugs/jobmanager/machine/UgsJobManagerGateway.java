@@ -1,6 +1,9 @@
 package com.bashworks.ugs.jobmanager.machine;
 
 import com.willwinder.universalgcodesender.listeners.ControllerState;
+import com.willwinder.universalgcodesender.listeners.ControllerStatus;
+import com.willwinder.universalgcodesender.model.events.CommandEvent;
+import com.willwinder.universalgcodesender.model.events.ControllerStatusEvent;
 import com.willwinder.universalgcodesender.listeners.UGSEventListener;
 import com.willwinder.universalgcodesender.model.BackendAPI;
 import com.willwinder.universalgcodesender.utils.Settings;
@@ -23,13 +26,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventListener {
 
     private final BackendAPI backend;
-    private File streamingFile;
+    private volatile File streamingFile;
+    private final RecoveryTelemetry recovery = new RecoveryTelemetry();
     private final List<JobManagerListener> listeners = new CopyOnWriteArrayList<>();
 
     public UgsJobManagerGateway(BackendAPI backend) {
         this.backend = Objects.requireNonNull(backend, "backend");
-        if (backend.isSendingFile()) streamingFile = getActiveGcodeFile();
+        recovery.loaded(backend.getGcodeFile(), backend.getProcessedGcodeFile());
+        if (backend.isSendingFile()) {
+            streamingFile = getActiveGcodeFile();
+            recovery.started(streamingFile, backend.getProcessedGcodeFile());
+        }
     }
+
+    @Override public RecoveryTelemetry recoveryTelemetry() { return recovery; }
 
     @Override
     public boolean isConnected() {
@@ -133,11 +143,24 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
 
     @Override
     public void UGSEvent(UGSEvent event) {
-        if (event instanceof FileStateEvent) {
+        if (event instanceof CommandEvent command) {
+            var code = command.getCommand();
+            switch (command.getCommandEventType()) {
+                case COMMAND_SENT -> recovery.sent(code.getCommandNumber(), code.getCommandString());
+                case COMMAND_COMPLETE -> {
+                    if (code.isOk()) recovery.acknowledged(code.getCommandNumber(), code.getCommandString());
+                }
+                default -> { }
+            }
+        } else if (event instanceof ControllerStatusEvent status) {
+            if (backend.isConnected()) captureRecoveryStatus(status.getStatus());
+        } else if (event instanceof FileStateEvent) {
             FileStateEvent fse = (FileStateEvent) event;
             if (fse.getFileState() == FileState.FILE_LOADED) {
+                recovery.loaded(backend.getGcodeFile(), backend.getProcessedGcodeFile());
                 dispatchActiveJobChanged(getActiveGcodeFile());
             } else if (fse.getFileState() == FileState.FILE_UNLOADED) {
+                recovery.loaded(null, null);
                 dispatchActiveJobChanged(null);
             }
         } else if (event instanceof ControllerStateEvent) {
@@ -147,7 +170,9 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
             boolean idle = isIdle();
             boolean sending = isSendingFile();
 
-            if (!connected || (state != null && "ALARM".equals(state.name()))) interruptStream();
+            if (!connected || state == ControllerState.ALARM) interruptStream();
+            else recovery.report(java.util.Map.of("status", state == null ? "UNKNOWN" : state.name(),
+                    "paused", Boolean.toString(backend.isPaused())));
             SwingUtilities.invokeLater(() -> {
                 for (JobManagerListener l : listeners) {
                     l.onMachineConnectionChanged(connected);
@@ -159,11 +184,14 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
             switch (se.getType()) {
                 case STREAM_STARTED:
                     streamingFile = getActiveGcodeFile();
+                    recovery.started(streamingFile, backend.getProcessedGcodeFile());
+                    if (backend.isConnected()) captureRecoveryStatus(null);
                     File started = streamingFile;
                     SwingUtilities.invokeLater(() -> listeners.forEach(l -> l.onJobStarted(started)));
                     break;
                 case STREAM_COMPLETE:
                     File finished = streamingFile;
+                    recovery.finished(finished);
                     streamingFile = null;
                     if (finished != null) SwingUtilities.invokeLater(() -> listeners.forEach(l -> l.onJobFinished(finished)));
                     break;
@@ -185,8 +213,43 @@ public final class UgsJobManagerGateway implements JobManagerGateway, UGSEventLi
 
     private void interruptStream() {
         File interrupted = streamingFile;
+        recovery.interrupted();
         streamingFile = null;
         if (interrupted != null) SwingUtilities.invokeLater(() -> listeners.forEach(l -> l.onJobInterrupted(interrupted)));
+    }
+
+    private void captureRecoveryStatus(ControllerStatus status) {
+        var fields = new java.util.LinkedHashMap<String, String>();
+        fields.put("status", getControllerStateName());
+        fields.put("paused", Boolean.toString(backend.isPaused()));
+        fields.put("streaming", Boolean.toString(backend.isSendingFile()));
+        fields.put("rows.sent", Long.toString(backend.getNumSentRows()));
+        fields.put("rows.acknowledged", Long.toString(backend.getNumCompletedRows()));
+        if (status == null) {
+            savePosition(fields, "machine", backend.getMachinePosition());
+            savePosition(fields, "work", backend.getWorkPosition());
+        } else {
+            savePosition(fields, "machine", status.getMachineCoord());
+            savePosition(fields, "work", status.getWorkCoord());
+            savePosition(fields, "offset", status.getWorkCoordinateOffset());
+            if (status.getSpindleSpeed() != null) fields.put("spindle.actual", status.getSpindleSpeed().toString());
+            if (status.getFeedSpeed() != null) fields.put("feed.actual", status.getFeedSpeed() + " " + status.getFeedSpeedUnits());
+        }
+        var modal = backend.getGcodeState();
+        if (modal != null) {
+            fields.put("modal", modal.machineStateCode());
+            fields.put("accessories", modal.toAccessoriesCode());
+            fields.put("feed", Double.toString(modal.feedRate));
+        }
+        recovery.report(fields);
+    }
+
+    private static void savePosition(java.util.Map<String, String> fields, String key,
+                                     com.willwinder.universalgcodesender.model.Position position) {
+        if (position == null) return;
+        fields.put(key, String.format(java.util.Locale.ROOT,
+                "X %.6f  Y %.6f  Z %.6f  A %.6f  B %.6f  C %.6f  (%s)",
+                position.x, position.y, position.z, position.a, position.b, position.c, position.getUnits()));
     }
 
     private void dispatchActiveJobChanged(File file) {

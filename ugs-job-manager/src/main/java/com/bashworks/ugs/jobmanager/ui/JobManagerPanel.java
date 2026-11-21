@@ -22,6 +22,7 @@ import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.io.File;
@@ -51,6 +52,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
     private final LocalJobsPanel localPanel;
 
     private final JobDetailsPanel detailsPanel;
+    private final RecoveryControls recovery;
 
 
     public JobManagerPanel(JobManagerGateway gateway) {
@@ -78,6 +80,9 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
                 this::activateJobDirectly
         );
 
+        recovery = new RecoveryControls(localPanel, gateway, lanService.getIncomingDirectory());
+        bannerFooter(headerCard, recovery);
+
         // Incoming queue and selected job inspector.
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, localPanel, detailsPanel);
         splitPane.setResizeWeight(0.60);
@@ -90,11 +95,32 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
         // Wire listener
         gateway.addListener(this);
         lanService.addListener(this);
-        lanService.start();
 
         if (gateway.isSendingFile()) localPanel.jobStarted(gateway.getActiveGcodeFile());
         updateHeaderStatus();
         updateActiveJobDisplay(gateway.getActiveGcodeFile());
+    }
+
+    private void bannerFooter(JPanel banner, JPanel panel) {
+        BorderLayout layout = (BorderLayout) banner.getLayout();
+        Component actions = layout.getLayoutComponent(BorderLayout.SOUTH);
+        banner.remove(actions);
+        JPanel footer = new JPanel(new BorderLayout(0, 5));
+        footer.setOpaque(false);
+        footer.add(actions, BorderLayout.NORTH);
+        footer.add(panel, BorderLayout.SOUTH);
+        banner.add(footer, BorderLayout.SOUTH);
+    }
+
+    public void openRecovery() {
+        recovery.open();
+        lanService.start();
+    }
+
+    public void setHeightMapRecovery(java.util.function.Supplier<String> capture,
+                                     java.util.function.Function<String, Boolean> restore,
+                                     java.util.function.BiFunction<File, com.willwinder.universalgcodesender.model.UnitUtils.Units, Boolean> restoreXyz) {
+        recovery.setNativeMap(capture, restore, restoreXyz);
     }
 
     private JPanel createHeaderBanner() {
@@ -166,13 +192,13 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
     }
 
     @Override public void onJobStarted(File file) {
-        SwingUtilities.invokeLater(() -> { localPanel.jobStarted(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
+        SwingUtilities.invokeLater(() -> { localPanel.jobStarted(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); recovery.newRun(); });
     }
     @Override public void onJobFinished(File file) {
-        SwingUtilities.invokeLater(() -> { localPanel.jobFinished(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
+        SwingUtilities.invokeLater(() -> { localPanel.jobFinished(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); recovery.tick(); });
     }
     @Override public void onJobInterrupted(File file) {
-        SwingUtilities.invokeLater(() -> { localPanel.jobInterrupted(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); });
+        SwingUtilities.invokeLater(() -> { localPanel.jobInterrupted(file); updateActiveJobDisplay(gateway.getActiveGcodeFile()); recovery.tick(); });
     }
 
     private void activateJobDirectly(JobEntry job) {
@@ -282,6 +308,7 @@ public class JobManagerPanel extends JPanel implements JobManagerListener, LanRe
     }
 
     public void close() {
+        recovery.close();
         completionAlert.close();
         completionAlarm.close();
         gateway.removeListener(this);
