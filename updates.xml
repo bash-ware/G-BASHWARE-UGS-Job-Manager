@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 
 <!DOCTYPE module_updates PUBLIC "-//NetBeans//DTD Autoupdate Catalog 2.8//EN" "https://netbeans.apache.org/dtds/autoupdate-catalog-2_8.dtd">
-<module_updates timestamp="58/53/20/21/11/2026">
+<module_updates timestamp="46/02/22/21/11/2026">
 
 
 
-<module codenamebase="com.willwinder.ugs.platform.plugin.job.manager" distribution="https://raw.githubusercontent.com/bash-ware/G-BASHWARE-UGS-Job-Manager/update-center/ugs-platform-plugin-job-manager-1.6.0.nbm" downloadsize="2657599" homepage="https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager" license="36074ADE" moduleauthor="G-BASHWARE" needsrestart="false" releasedate="2026/11/21" targetcluster="ugsplatform">
+<module codenamebase="com.willwinder.ugs.platform.plugin.job.manager" distribution="https://raw.githubusercontent.com/bash-ware/G-BASHWARE-UGS-Job-Manager/update-center/ugs-platform-plugin-job-manager-1.6.1.nbm" downloadsize="2655628" homepage="https://github.com/bash-ware/G-BASHWARE-UGS-Job-Manager" license="36074ADE" moduleauthor="G-BASHWARE" needsrestart="false" releasedate="2026/11/21" targetcluster="ugsplatform">
         
-    <manifest AutoUpdate-Essential-Module="false" OpenIDE-Module="com.willwinder.ugs.platform.plugin.job.manager" OpenIDE-Module-Display-Category="G-BASHWARE" OpenIDE-Module-Implementation-Version="1.6.0" OpenIDE-Module-Java-Dependencies="Java &gt; 11" OpenIDE-Module-Long-Description="&lt;p&gt;G-BASHWARE Job Manager receives CNC jobs from another computer over the local network and provides a persistent incoming queue with bulk removal, with instant dimensional analysis and one-click activation in UGS Platform.&lt;/p&gt;" OpenIDE-Module-Module-Dependencies="com.willwinder.ugs.platform.ugslib &gt; 2.0.0.2024.03.08.07.26, org.netbeans.api.annotations.common/1 &gt; 1.48, org.openide.awt &gt; 7.88, org.openide.windows &gt; 6.97, org.openide.util &gt; 9.28, org.openide.util.lookup &gt; 8.54, org.netbeans.modules.autoupdate.services &gt; 1.76" OpenIDE-Module-Name="G-BASHWARE Job Manager" OpenIDE-Module-Requires="org.openide.modules.ModuleFormat1" OpenIDE-Module-Short-Description="Local incoming G-code queue and LAN receiver for UGS Platform" OpenIDE-Module-Specification-Version="1.6.0"/>
+    <manifest AutoUpdate-Essential-Module="false" OpenIDE-Module="com.willwinder.ugs.platform.plugin.job.manager" OpenIDE-Module-Display-Category="G-BASHWARE" OpenIDE-Module-Implementation-Version="1.6.1" OpenIDE-Module-Java-Dependencies="Java &gt; 11" OpenIDE-Module-Long-Description="&lt;p&gt;G-BASHWARE Job Manager receives CNC jobs from another computer over the local network and provides a persistent incoming queue with bulk removal, with instant dimensional analysis and one-click activation in UGS Platform.&lt;/p&gt;" OpenIDE-Module-Module-Dependencies="com.willwinder.ugs.platform.ugslib &gt; 2.0.0.2024.03.08.07.26, org.netbeans.api.annotations.common/1 &gt; 1.48, org.openide.awt &gt; 7.88, org.openide.windows &gt; 6.97, org.openide.util &gt; 9.28, org.openide.util.lookup &gt; 8.54, org.netbeans.modules.autoupdate.services &gt; 1.76" OpenIDE-Module-Name="G-BASHWARE Job Manager" OpenIDE-Module-Requires="org.openide.modules.ModuleFormat1" OpenIDE-Module-Short-Description="Local incoming G-code queue and LAN receiver for UGS Platform" OpenIDE-Module-Specification-Version="1.6.1"/>
         
 
-    <message_digest algorithm="SHA-512" value="e104d0b8246d35928d91dd4d070dca66e07e11aca7e4fcacb990842d24c5ba22165c0ffffbd1ef7512f6a1f427514ffd81ab116e921b19e3dc874909ad8cd4a0"/>
+    <message_digest algorithm="SHA-512" value="10384e489e406119e8938febd2457c29ea73a66d443fd42f008b853467ddd2007243e40dc6b928dfaa7a6e39c47208bd066802acc9bca9d1d5914bc4caac5a0f"/>
 </module>
 
 <license name="36074ADE">Copyright G-BASHWARE 2012-2026
